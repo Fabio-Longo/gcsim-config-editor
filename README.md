@@ -1,0 +1,33 @@
+# gcsim config editor
+
+GUI-редактор конфигов [gcsim](https://gcsim.app) для Genshin Impact: команда до 4 героев (созвездия, уровень, таланты, оружие, сеты и статы артефактов) и таймлайн ротации с drag & drop. Справа внизу — готовый конфиг (Copy / Download). Состояние сохраняется в `localStorage`.
+
+## Запуск
+
+```bash
+npm install
+```
+
+```bash
+npm run dev
+```
+
+Открыть http://localhost:5173.
+
+## Обновление данных после патча игры
+
+```bash
+npm run fetch-data
+```
+
+Скрипт `scripts/fetch-data.mjs` берёт ключи, имена, элементы и допустимые действия персонажей из репозитория gcsim, а иконки — с Enka CDN. Результат: `src/data/gamedata.json` и `public/img/**` (уже скачанные иконки не перекачиваются).
+
+## Устройство
+
+- `src/state.ts` — состояние (reducer) и сохранение в localStorage
+- `src/config.ts` — генерация текста конфига gcsim
+- `src/components/CharacterSlot.tsx` — карточка героя
+- `src/components/Timeline.tsx` — ротация (dnd-kit)
+- `src/components/Picker.tsx` — модалка выбора с поиском и картинками
+
+Главные статы артефактов — значения 5★ +20; сабстаты вводятся суммарно (проценты — в процентах, в конфиг пишутся долями).
