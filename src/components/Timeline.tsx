@@ -39,6 +39,13 @@ const laneId = (cid: string) => `c:${cid}`;
 const clampSeconds = (v: number) => Math.max(0.1, Math.min(60, Math.round((Number.isFinite(v) ? v : 1) * 10) / 10));
 const stop = (e: PointerEvent | KeyboardEvent) => e.stopPropagation();
 
+/** Plays the leave animation on `el`, then runs `done` (the actual removal). */
+function animateOut(el: Element | null, done: () => void) {
+  if (!el) return done();
+  el.classList.add("leaving");
+  setTimeout(done, 150);
+}
+
 export function Timeline({ team, rotation, dispatch }: Props) {
   const [addTo, setAddTo] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -115,7 +122,10 @@ export function Timeline({ team, rotation, dispatch }: Props) {
         onDragCancel={endDrag}
       >
         <div className="rotation-panel">
-          <Lane cid={ROOT} nodes={rotation} />
+          {/* "tracks" draws the rails: one line per track, across the full scroll width. */}
+          <div className="tracks">
+            <Lane cid={ROOT} nodes={rotation} />
+          </div>
         </div>
         <DragOverlay dropAnimation={null}>{active ? <DragGhost node={active} /> : null}</DragOverlay>
       </DndContext>
@@ -174,7 +184,12 @@ function NodeButtons({ id }: { id: string }) {
       <button className="mini" title={t("duplicate")} onPointerDown={stop} onClick={() => dispatch({ type: "duplicateNode", id })}>
         ⧉
       </button>
-      <button className="mini danger" title={t("remove")} onPointerDown={stop} onClick={() => dispatch({ type: "removeNode", id })}>
+      <button
+        className="mini danger"
+        title={t("remove")}
+        onPointerDown={stop}
+        onClick={() => animateOut(document.querySelector(`[data-node="${id}"]`), () => dispatch({ type: "removeNode", id }))}
+      >
         ×
       </button>
     </>
@@ -240,7 +255,7 @@ function CondInput({ value, onChange }: { value: string; onChange: (v: string) =
       className="cond"
       value={value}
       placeholder={t("condPlaceholder")}
-      size={Math.max(18, value.length + 1)}
+      title={value}
       spellCheck={false}
       onPointerDown={stop}
       onKeyDown={stop}
@@ -249,13 +264,26 @@ function CondInput({ value, onChange }: { value: string; onChange: (v: string) =
   );
 }
 
-function BlockHead({ handle, label, children }: { handle: Handle; label: string; children?: ReactNode }) {
-  return (
-    <div className="block-head">
-      <span className="grip" {...handle}>
-        ⠿ {label}
+/** Keyword with editor-style colors: `if` green, `else` red, `else if` both. */
+function Keyword({ word }: { word: "if" | "else if" | "else" | "while" }) {
+  if (word === "else if")
+    return (
+      <span className="kw">
+        <span className="kw-else">else</span> <span className="kw-if">if</span>
       </span>
-      {children}
+    );
+  return <span className={`kw kw-${word}`}>{word}</span>;
+}
+
+/**
+ * One row of a block, like a track header + track in a video editor: the header cell sits to
+ * the left, so conditions never push the cards down out of line with cards outside the block.
+ */
+function BlockRow({ head, cid, nodes, branchId }: { head: ReactNode; cid: string; nodes: RNode[]; branchId?: string }) {
+  return (
+    <div className="branch" data-branch={branchId}>
+      <div className="block-head">{head}</div>
+      <Lane cid={cid} nodes={nodes} />
     </div>
   );
 }
@@ -266,22 +294,38 @@ function BlockView({ node, handle }: { node: Exclude<RNode, ActionNode>; handle:
   if (node.kind === "group")
     return (
       <div className="block group">
-        <BlockHead handle={handle} label={t("block.group")}>
-          <span className="spacer" />
-          <NodeButtons id={node.id} />
-        </BlockHead>
-        <Lane cid={node.id} nodes={node.children} />
+        <BlockRow
+          cid={node.id}
+          nodes={node.children}
+          head={
+            <div className="head-top">
+              <span className="grip" {...handle}>
+                ⠿ {t("block.group")}
+              </span>
+              <NodeButtons id={node.id} />
+            </div>
+          }
+        />
       </div>
     );
   if (node.kind === "while")
     return (
       <div className="block while">
-        <BlockHead handle={handle} label="while">
-          <CondInput value={node.cond} onChange={(cond) => dispatch({ type: "updateNode", id: node.id, patch: { cond } })} />
-          <span className="spacer" />
-          <NodeButtons id={node.id} />
-        </BlockHead>
-        <Lane cid={node.id} nodes={node.children} />
+        <BlockRow
+          cid={node.id}
+          nodes={node.children}
+          head={
+            <>
+              <div className="head-top">
+                <span className="grip" {...handle}>
+                  ⠿ <Keyword word="while" />
+                </span>
+                <NodeButtons id={node.id} />
+              </div>
+              <CondInput value={node.cond} onChange={(cond) => dispatch({ type: "updateNode", id: node.id, patch: { cond } })} />
+            </>
+          }
+        />
       </div>
     );
   return <IfView node={node} handle={handle} />;
@@ -295,46 +339,76 @@ function IfView({ node, handle }: { node: IfNode; handle: Handle }) {
       className="mini danger"
       title={t("remove")}
       onPointerDown={stop}
-      onClick={() => dispatch({ type: "removeBranch", ifId: node.id, branchId: b.id })}
+      onClick={() =>
+        animateOut(document.querySelector(`[data-branch="${b.id}"]`), () =>
+          dispatch({ type: "removeBranch", ifId: node.id, branchId: b.id }),
+        )
+      }
     >
       ×
     </button>
   );
+  const lastId = (node.elseBranch ?? node.branches[node.branches.length - 1]).id;
+  // "+ else if / + else" live in the header of the bottom row, so they add no height of their own.
+  const addButtons = (b: Branch) =>
+    b.id === lastId && (
+      <div className="head-add">
+        <button onPointerDown={stop} onClick={() => dispatch({ type: "addBranch", ifId: node.id, branch: "elif" })}>
+          + <Keyword word="else if" />
+        </button>
+        {!node.elseBranch && (
+          <button onPointerDown={stop} onClick={() => dispatch({ type: "addBranch", ifId: node.id, branch: "else" })}>
+            + <Keyword word="else" />
+          </button>
+        )}
+      </div>
+    );
   return (
     <div className="block if">
       {node.branches.map((b, i) => (
-        <div className="branch" key={b.id}>
-          {i === 0 ? (
-            <BlockHead handle={handle} label="if">
+        <BlockRow
+          key={b.id}
+          branchId={b.id}
+          cid={b.id}
+          nodes={b.children}
+          head={
+            <>
+              <div className="head-top">
+                {i === 0 ? (
+                  <span className="grip" {...handle}>
+                    ⠿ <Keyword word="if" />
+                  </span>
+                ) : (
+                  <span className="branch-label">
+                    <Keyword word="else if" />
+                  </span>
+                )}
+                {i === 0 ? <NodeButtons id={node.id} /> : removeBranch(b)}
+              </div>
               <CondInput value={b.cond} onChange={(cond) => dispatch({ type: "setBranchCond", ifId: node.id, branchId: b.id, cond })} />
-              <span className="spacer" />
-              <NodeButtons id={node.id} />
-            </BlockHead>
-          ) : (
-            <div className="block-head">
-              <span className="branch-label">elif</span>
-              <CondInput value={b.cond} onChange={(cond) => dispatch({ type: "setBranchCond", ifId: node.id, branchId: b.id, cond })} />
-              <span className="spacer" />
-              {removeBranch(b)}
-            </div>
-          )}
-          <Lane cid={b.id} nodes={b.children} />
-        </div>
+              {addButtons(b)}
+            </>
+          }
+        />
       ))}
       {node.elseBranch && (
-        <div className="branch">
-          <div className="block-head">
-            <span className="branch-label">else</span>
-            <span className="spacer" />
-            {removeBranch(node.elseBranch)}
-          </div>
-          <Lane cid={node.elseBranch.id} nodes={node.elseBranch.children} />
-        </div>
+        <BlockRow
+          branchId={node.elseBranch.id}
+          cid={node.elseBranch.id}
+          nodes={node.elseBranch.children}
+          head={
+            <>
+              <div className="head-top">
+                <span className="branch-label">
+                  <Keyword word="else" />
+                </span>
+                {removeBranch(node.elseBranch)}
+              </div>
+              {addButtons(node.elseBranch)}
+            </>
+          }
+        />
       )}
-      <div className="if-foot">
-        <button onClick={() => dispatch({ type: "addBranch", ifId: node.id, branch: "elif" })}>+ elif</button>
-        {!node.elseBranch && <button onClick={() => dispatch({ type: "addBranch", ifId: node.id, branch: "else" })}>+ else</button>}
-      </div>
     </div>
   );
 }
