@@ -1,4 +1,4 @@
-import { MAIN_VALUES, statByKey } from "./data";
+import { CAN_SKIP, STATS, statByKey } from "./data";
 import type { CharConfig, State } from "./state";
 
 const fmt = (key: string, uiValue: number) => {
@@ -14,20 +14,8 @@ function charBlock(c: CharConfig): string[] {
   ];
   for (const s of c.sets) if (s.key) lines.push(`${k} add set="${s.key}" count=${s.count};`);
 
-  const main: [string, number][] = [
-    ["hp", MAIN_VALUES.hp],
-    ["atk", MAIN_VALUES.atk],
-  ];
-  // Two pieces with the same main stat (e.g. atk% sands + atk% goblet) must be summed.
-  for (const stat of [c.main.sands, c.main.goblet, c.main.circlet]) {
-    const existing = main.find(([k2]) => k2 === stat);
-    if (existing) existing[1] += MAIN_VALUES[stat];
-    else main.push([stat, MAIN_VALUES[stat]]);
-  }
-  lines.push(`${k} add stats ${main.map(([s, v]) => fmt(s, v)).join(" ")}; #main`);
-
-  const subs = Object.entries(c.subs).filter(([, v]) => v);
-  if (subs.length) lines.push(`${k} add stats ${subs.map(([s, v]) => fmt(s, v)).join(" ")}; #subs`);
+  const stats = STATS.filter((s) => c.stats[s.key]).map((s) => fmt(s.key, c.stats[s.key]));
+  if (stats.length) lines.push(`${k} add stats ${stats.join(" ")};`);
   return lines;
 }
 
@@ -50,7 +38,9 @@ export function generateConfig(state: State): string {
   const actionLines = rot.map((r) =>
     r.action === "wait"
       ? `wait(${Math.round((r.seconds ?? 1) * 60)}); # ${r.seconds ?? 1}s` // gcsim waits in frames (60/s)
-      : `${r.char} ${r.action}${r.count > 1 ? `:${r.count}` : ""};`,
+      : r.skipOnCooldown && CAN_SKIP.has(r.action)
+        ? `if .${r.char}.${r.action}.ready { ${r.char} ${r.action}; }`
+        : `${r.char} ${r.action}${r.count > 1 ? `:${r.count}` : ""};`,
   );
   if (state.settings.loop && actionLines.length) {
     out.push("while 1 {", ...actionLines.map((l) => `  ${l}`), "}");

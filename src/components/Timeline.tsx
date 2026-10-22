@@ -6,7 +6,7 @@ import {
   arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordinates, useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { charByKey, COUNTABLE, ELEMENT_COLORS, img } from "../data";
+import { CAN_SKIP, charByKey, COUNTABLE, ELEMENT_COLORS, img } from "../data";
 import { useI18n } from "../i18n";
 import type { Action, CharConfig, RotationAction } from "../state";
 
@@ -102,6 +102,16 @@ function ActionCard({ item, index, dispatch }: { item: RotationAction; index: nu
           />
           <span>{t("seconds")}</span>
         </div>
+      )}
+      {CAN_SKIP.has(item.action) && (
+        <label className="skip" onPointerDown={stop} onKeyDown={stop}>
+          <input
+            type="checkbox"
+            checked={!!item.skipOnCooldown}
+            onChange={(e) => dispatch({ type: "updateAction", id: item.id, patch: { skipOnCooldown: e.target.checked } })}
+          />
+          <span>{t("skipOnCooldown")}</span>
+        </label>
       )}
       {COUNTABLE.has(item.action) && (
         <div className="counter" onPointerDown={stop}>

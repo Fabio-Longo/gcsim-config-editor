@@ -78,23 +78,17 @@ export const STATS: { key: string; pct: boolean }[] = [
 ];
 export const statByKey = new Map(STATS.map((s) => [s.key, s]));
 
-export const SUBSTATS = ["hp", "hp%", "atk", "atk%", "def", "def%", "em", "er", "cr", "cd"];
-
-// 5* +20 main stat values (in UI units: percent for pct stats).
+// 5* +20 main stat values (in UI units: percent for pct stats); used for default artifact totals.
 export const MAIN_VALUES: Record<string, number> = {
   hp: 4780, atk: 311, "hp%": 46.6, "atk%": 46.6, "def%": 58.3, em: 186.5, er: 51.8,
   cr: 31.1, cd: 62.2, heal: 35.9, "phys%": 58.3,
   "pyro%": 46.6, "hydro%": 46.6, "cryo%": 46.6, "electro%": 46.6, "anemo%": 46.6, "geo%": 46.6, "dendro%": 46.6,
 };
-const ELEM_DMG = ["pyro%", "hydro%", "cryo%", "electro%", "anemo%", "geo%", "dendro%", "phys%"];
-export const MAIN_OPTIONS = {
-  sands: ["atk%", "hp%", "def%", "em", "er"],
-  goblet: ["atk%", "hp%", "def%", "em", ...ELEM_DMG],
-  circlet: ["atk%", "hp%", "def%", "em", "cr", "cd", "heal"],
-};
 
 // Actions that can be repeated with gcsim's `action:N` syntax.
 export const COUNTABLE = new Set(["attack", "charge", "aim"]);
+// Actions that can be made conditional on being off cooldown.
+export const CAN_SKIP = new Set(["skill", "burst"]);
 
 export const MAX_LEVELS = [20, 40, 50, 60, 70, 80, 90, 100];
 

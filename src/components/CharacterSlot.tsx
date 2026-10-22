@@ -1,7 +1,6 @@
 import { useState, type Dispatch } from "react";
 import {
-  characters, charByKey, ELEMENT_COLORS, img, MAIN_OPTIONS, MAIN_VALUES, MAX_LEVELS, setByKey, sets,
-  statByKey, SUBSTATS, weaponByKey, weapons,
+  characters, charByKey, ELEMENT_COLORS, img, MAX_LEVELS, setByKey, sets, STATS, weaponByKey, weapons,
 } from "../data";
 import { useI18n } from "../i18n";
 import type { Action, CharConfig, SetChoice } from "../state";
@@ -10,9 +9,6 @@ import { Picker, type PickerItem } from "./Picker";
 const RARITY_COLORS: Record<number, string> = { 5: "#b8823e", 4: "#8a6bbf", 3: "#4f7fa8" };
 
 const byName = (a: PickerItem, b: PickerItem) => a.name.localeCompare(b.name);
-
-// Substats whose full label is too long for the substat grid.
-const SHORT_SUBS = new Set(["em", "er", "cr"]);
 
 type PickerKind = null | "char" | "weapon" | 0 | 1;
 
@@ -219,47 +215,28 @@ export function CharacterSlot({ slot, char, taken, dispatch }: Props) {
         </div>
       )}
 
-      <div className="mains">
-        {(["sands", "goblet", "circlet"] as const).map((piece) => (
-          <label className="field" key={piece}>
-            <span>{t(piece)}</span>
-            <select value={char.main[piece]} onChange={(e) => update({ main: { ...char.main, [piece]: e.target.value } })}>
-              {MAIN_OPTIONS[piece].map((s) => (
-                <option key={s} value={s}>
-                  {t(`stat.${s}`)} ({MAIN_VALUES[s]}
-                  {statByKey.get(s)!.pct ? "%" : ""})
-                </option>
-              ))}
-            </select>
+      <div className="section-label">{t("artifactStats")}</div>
+      <p className="muted tiny">{t("artifactStatsHint")}</p>
+      <div className="subs">
+        {STATS.map(({ key, pct }) => (
+          <label key={key} className="sub" title={t(`stat.${key}`)}>
+            <span>{t(`short.${key}`)}</span>
+            <input
+              type="number"
+              step="0.1"
+              min={0}
+              value={char.stats[key] ?? ""}
+              placeholder="0"
+              onChange={(e) => {
+                const stats = { ...char.stats };
+                if (e.target.value === "") delete stats[key];
+                else stats[key] = +e.target.value;
+                update({ stats });
+              }}
+            />
+            <em>{pct ? "%" : ""}</em>
           </label>
         ))}
-      </div>
-      <p className="muted tiny">{t("flowerNote")}</p>
-
-      <div className="section-label">{t("substats")}</div>
-      <div className="subs">
-        {SUBSTATS.map((s) => {
-          const st = statByKey.get(s)!;
-          return (
-            <label key={s} className="sub">
-              <span>{t(SHORT_SUBS.has(s) ? `sub.${s}` : `stat.${s}`)}</span>
-              <input
-                type="number"
-                step="0.1"
-                min={0}
-                value={char.subs[s] ?? ""}
-                placeholder="0"
-                onChange={(e) => {
-                  const subs = { ...char.subs };
-                  if (e.target.value === "") delete subs[s];
-                  else subs[s] = +e.target.value;
-                  update({ subs });
-                }}
-              />
-              <em>{st.pct ? "%" : ""}</em>
-            </label>
-          );
-        })}
       </div>
       {pickerEl}
     </div>

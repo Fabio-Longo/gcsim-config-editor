@@ -1,5 +1,5 @@
 import { useEffect, useReducer } from "react";
-import { charByKey, weapons, type CharInfo } from "./data";
+import { charByKey, MAIN_VALUES, weapons, type CharInfo } from "./data";
 
 export interface SetChoice {
   key: string;
@@ -14,9 +14,8 @@ export interface CharConfig {
   talents: [number, number, number];
   weapon: { key: string; refine: number; level: number; maxLevel: number };
   sets: SetChoice[];
-  main: { sands: string; goblet: string; circlet: string };
-  /** Substat totals in UI units (percent for pct stats). */
-  subs: Record<string, number>;
+  /** Total bonuses from all 5 artifacts (main + sub stats), in UI units (percent for pct stats). */
+  stats: Record<string, number>;
 }
 
 export interface RotationAction {
@@ -27,6 +26,8 @@ export interface RotationAction {
   count: number;
   /** Duration of a "wait" step. */
   seconds?: number;
+  /** skill/burst only: emit `if .char.<action>.ready { ... }` so the step is skipped while on cooldown. */
+  skipOnCooldown?: boolean;
 }
 
 export interface Settings {
@@ -59,6 +60,13 @@ const initial: State = {
 
 const defaultSubs = { cr: 31.1, cd: 62.2, "atk%": 19.8, er: 11.0, em: 39.6 };
 
+/** Sums flower/plume + three main stats + substats into one stat map. */
+function totalStats(mains: string[], subs: Record<string, number>): Record<string, number> {
+  const stats: Record<string, number> = { ...subs };
+  for (const s of ["hp", "atk", ...mains]) stats[s] = Math.round(((stats[s] ?? 0) + MAIN_VALUES[s]) * 10) / 10;
+  return stats;
+}
+
 export function newCharConfig(info: CharInfo): CharConfig {
   const weapon = weapons.find((w) => w.type === info.weapon)!;
   return {
@@ -69,12 +77,8 @@ export function newCharConfig(info: CharInfo): CharConfig {
     talents: [9, 9, 9],
     weapon: { key: weapon.key, refine: 1, level: 90, maxLevel: 90 },
     sets: [],
-    main: {
-      sands: "atk%",
-      goblet: info.element === "none" ? "atk%" : `${info.element}%`,
-      circlet: "cr",
-    },
-    subs: { ...defaultSubs },
+    // Typical starting point: ATK% sands, elemental goblet, crit circlet.
+    stats: totalStats(["atk%", info.element === "none" ? "phys%" : `${info.element}%`, "cr"], defaultSubs),
   };
 }
 
@@ -120,7 +124,14 @@ const STORAGE_KEY = "gcsim-editor-state";
 function load(): State {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { ...initial, ...JSON.parse(raw) };
+    if (raw) {
+      const saved = JSON.parse(raw);
+      // Older saves kept main stats per piece and substats separately; fold them into one total.
+      saved.team = saved.team?.map((c: (CharConfig & { main?: Record<string, string>; subs?: Record<string, number> }) | null) =>
+        c && !c.stats && c.main ? { ...c, stats: totalStats(Object.values(c.main), c.subs ?? {}) } : c,
+      );
+      return { ...initial, ...saved };
+    }
   } catch {}
   return initial;
 }

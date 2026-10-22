@@ -84,11 +84,8 @@ main > section > h2, .section-head { margin-bottom: 10px; }
 .pick-row.set { padding: 0; flex: 1; gap: 0; }
 .pick-row.set > button:first-child { flex: 1; display: flex; align-items: center; gap: 8px; text-align: left; padding: 4px 8px; }
 .pick-row .ph { width: 36px; height: 36px; display: grid; place-items: center; font-size: 20px; color: var(--muted); }
-.mains { display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; align-items: center; }
-.mains .field { display: contents; }
-.mains select { font-size: 12px; width: 100%; }
-.subs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; }
-.sub { display: grid; grid-template-columns: 1fr 64px 12px; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
+.subs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; }
+.sub { display: grid; grid-template-columns: 1fr 54px 10px; align-items: center; gap: 3px; font-size: 12px; color: var(--muted); }
 .sub input { text-align: right; }
 .sub em { font-style: normal; }
 
@@ -149,3 +146,6 @@ main > section > h2, .section-head { margin-bottom: 10px; }
 .card .counter input { width: 52px; padding: 1px 4px; text-align: right; font-size: 12px; }
 .wait-row { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--border); padding-top: 10px; color: var(--muted); font-size: 13px; }
 .wait-row input { width: 70px; }
+.skip { display: flex; align-items: flex-start; gap: 4px; font-size: 10px; line-height: 1.2; color: var(--muted); cursor: pointer; }
+.skip input { margin: 0; flex: none; }
+.sub span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
