@@ -20,7 +20,15 @@ npm run dev
 npm run fetch-data
 ```
 
-Скрипт `scripts/fetch-data.mjs` берёт ключи, имена, элементы и допустимые действия персонажей из репозитория gcsim, а иконки — с Enka CDN. Результат: `src/data/gamedata.json` и `public/img/**` (уже скачанные иконки не перекачиваются).
+Скрипт `scripts/fetch-data.mjs` берёт ключи, имена, элементы и допустимые действия персонажей из репозитория gcsim, а иконки — с Enka CDN (сохраняются в WebP). Результат: `src/data/gamedata.json` и `public/img/**` (уже скачанные иконки не перекачиваются).
+
+## Деплой на GitHub Pages
+
+1. Запушить репозиторий на GitHub (публичный — для бесплатного Pages).
+2. В репозитории: **Settings → Pages → Source: GitHub Actions**.
+3. Каждый push в `main`/`master` собирает и публикует сайт (`.github/workflows/deploy.yml`). Адрес: `https://<user>.github.io/<repo>/`.
+
+Сборка использует относительный `base: "./"`, поэтому работает при любом имени репозитория (и на Netlify тоже: build `npm run build`, publish `dist`).
 
 ## Устройство
 

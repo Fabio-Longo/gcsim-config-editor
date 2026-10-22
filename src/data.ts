@@ -48,10 +48,12 @@ export const charByKey = new Map(characters.map((c) => [c.key, c]));
 export const weaponByKey = new Map(weapons.map((w) => [w.key, w]));
 export const setByKey = new Map(sets.map((s) => [s.key, s]));
 
+// BASE_URL keeps icon paths working when the site is served from a subpath (GitHub Pages).
+const IMG = `${import.meta.env.BASE_URL}img`;
 export const img = {
-  char: (key: string) => `/img/char/${key}.png`,
-  weapon: (key: string) => `/img/weapon/${key}.png`,
-  set: (key: string) => `/img/artifact/${key}.png`,
+  char: (key: string) => `${IMG}/char/${key}.webp`,
+  weapon: (key: string) => `${IMG}/weapon/${key}.webp`,
+  set: (key: string) => `${IMG}/artifact/${key}.webp`,
 };
 
 // gcsim stat keys. `pct` stats are entered in percent in the UI and written as fractions.

@@ -1,7 +1,8 @@
 // Pulls character/weapon/artifact data from the gcsim repo and icons from Enka,
-// writes src/data/gamedata.json and public/img/**. Re-run to update after a game patch.
+// writes src/data/gamedata.json and public/img/** (icons converted to WebP). Re-run to update after a game patch.
 import fs from "node:fs/promises";
 import path from "node:path";
+import sharp from "sharp";
 
 const RAW = "https://raw.githubusercontent.com/genshinsim/gcsim/main/ui/packages";
 const ICON = (name) => `https://enka.network/ui/${name}.png`;
@@ -56,7 +57,7 @@ for (const [key, c] of Object.entries(charDb.data)) {
     actions: acts.length ? acts : ["attack", "charge", "skill", "burst", "dash", "jump", "walk"],
     notes,
   });
-  downloads.push([ICON(icon), `char/${key}.png`]);
+  downloads.push([ICON(icon), `char/${key}.webp`]);
 }
 
 const weapons = [];
@@ -65,7 +66,7 @@ for (const [key, icon] of Object.entries(weaponIcons)) {
   const cls = ICON_WEAPON_CLASS[icon.split("_")[2]];
   if (!cls) continue;
   weapons.push({ key, name: en.weapon_names[key], names: allNames("weapon_names", key), type: cls });
-  downloads.push([ICON(icon), `weapon/${key}.png`]);
+  downloads.push([ICON(icon), `weapon/${key}.webp`]);
 }
 
 const sets = [];
@@ -73,7 +74,7 @@ for (const key of Object.keys(en.artifact_names)) {
   const icon = ["flower", "plume", "sands", "goblet", "circlet"].map((s) => artifactIcons[`${key}_${s}`]).find(Boolean);
   if (!icon) continue;
   sets.push({ key, name: en.artifact_names[key], names: allNames("artifact_names", key) });
-  downloads.push([ICON(icon), `artifact/${key}.png`]);
+  downloads.push([ICON(icon), `artifact/${key}.webp`]);
 }
 
 const byName = (a, b) => a.name.localeCompare(b.name);
@@ -100,7 +101,7 @@ await Promise.all(
         const r = await fetch(url);
         if (!r.ok) throw new Error(r.status);
         await fs.mkdir(path.dirname(file), { recursive: true });
-        await fs.writeFile(file, Buffer.from(await r.arrayBuffer()));
+        await sharp(Buffer.from(await r.arrayBuffer())).webp({ quality: 85 }).toFile(file);
         done++;
       } catch (e) {
         failed++;
