@@ -21,9 +21,12 @@ export interface CharConfig {
 
 export interface RotationAction {
   id: string;
+  /** Empty for "wait", which belongs to no character. */
   char: string;
   action: string;
   count: number;
+  /** Duration of a "wait" step. */
+  seconds?: number;
 }
 
 export interface Settings {
@@ -41,7 +44,7 @@ export interface State {
 export type Action =
   | { type: "setChar"; slot: number; key: string | null }
   | { type: "updateChar"; slot: number; patch: Partial<CharConfig> }
-  | { type: "addAction"; char: string; action: string; count: number }
+  | { type: "addAction"; char: string; action: string; count: number; seconds?: number }
   | { type: "updateAction"; id: string; patch: Partial<RotationAction> }
   | { type: "removeAction"; id: string }
   | { type: "setRotation"; rotation: RotationAction[] }
@@ -95,7 +98,10 @@ function reducer(state: State, a: Action): State {
       return { ...state, team };
     }
     case "addAction":
-      return { ...state, rotation: [...state.rotation, { id: uid(), char: a.char, action: a.action, count: a.count }] };
+      return {
+        ...state,
+        rotation: [...state.rotation, { id: uid(), char: a.char, action: a.action, count: a.count, seconds: a.seconds }],
+      };
     case "updateAction":
       return { ...state, rotation: state.rotation.map((r) => (r.id === a.id ? { ...r, ...a.patch } : r)) };
     case "removeAction":

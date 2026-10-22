@@ -22,6 +22,10 @@ const [charDb, actions, names, charIcons, weaponIcons, artifactIcons] = await Pr
   get("workers/src/assets/artifact.dm.json"),
 ]);
 const en = names.English;
+const LANGS = { en: "English", ru: "Russian", zh: "Chinese", ja: "Japanese", ko: "Korean", de: "German", es: "Spanish" };
+// Names in every language gcsim ships: UI shows en/ru, search matches all of them.
+const allNames = (group, key) =>
+  Object.fromEntries(Object.entries(LANGS).map(([code, lang]) => [code, names[lang]?.[group]?.[key] ?? en[group][key]]));
 
 const ELEMENTS = { Wind: "anemo", Ice: "cryo", Fire: "pyro", Water: "hydro", Electric: "electro", Rock: "geo", Grass: "dendro" };
 const WEAPON_CLASS = {
@@ -45,6 +49,7 @@ for (const [key, c] of Object.entries(charDb.data)) {
   characters.push({
     key,
     name: en.character_names[key],
+    names: allNames("character_names", key),
     rarity: c.rarity === "QUALITY_ORANGE" ? 5 : 4,
     element: ELEMENTS[c.element] ?? "none",
     weapon: WEAPON_CLASS[c.weapon_class] ?? "sword",
@@ -59,7 +64,7 @@ for (const [key, icon] of Object.entries(weaponIcons)) {
   if (!en.weapon_names[key]) continue;
   const cls = ICON_WEAPON_CLASS[icon.split("_")[2]];
   if (!cls) continue;
-  weapons.push({ key, name: en.weapon_names[key], type: cls });
+  weapons.push({ key, name: en.weapon_names[key], names: allNames("weapon_names", key), type: cls });
   downloads.push([ICON(icon), `weapon/${key}.png`]);
 }
 
@@ -67,7 +72,7 @@ const sets = [];
 for (const key of Object.keys(en.artifact_names)) {
   const icon = ["flower", "plume", "sands", "goblet", "circlet"].map((s) => artifactIcons[`${key}_${s}`]).find(Boolean);
   if (!icon) continue;
-  sets.push({ key, name: en.artifact_names[key] });
+  sets.push({ key, name: en.artifact_names[key], names: allNames("artifact_names", key) });
   downloads.push([ICON(icon), `artifact/${key}.png`]);
 }
 

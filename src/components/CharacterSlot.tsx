@@ -3,19 +3,16 @@ import {
   characters, charByKey, ELEMENT_COLORS, img, MAIN_OPTIONS, MAIN_VALUES, MAX_LEVELS, setByKey, sets,
   statByKey, SUBSTATS, weaponByKey, weapons,
 } from "../data";
+import { useI18n } from "../i18n";
 import type { Action, CharConfig, SetChoice } from "../state";
 import { Picker, type PickerItem } from "./Picker";
 
 const RARITY_COLORS: Record<number, string> = { 5: "#b8823e", 4: "#8a6bbf", 3: "#4f7fa8" };
 
-const charItems = (taken: string[]): PickerItem[] =>
-  characters.map((c) => ({
-    key: c.key,
-    name: c.name,
-    img: img.char(c.key),
-    accent: RARITY_COLORS[c.rarity],
-    disabled: taken.includes(c.key),
-  }));
+const byName = (a: PickerItem, b: PickerItem) => a.name.localeCompare(b.name);
+
+// Substats whose full label is too long for the substat grid.
+const SHORT_SUBS = new Set(["em", "er", "cr"]);
 
 type PickerKind = null | "char" | "weapon" | 0 | 1;
 
@@ -27,6 +24,7 @@ interface Props {
 }
 
 export function CharacterSlot({ slot, char, taken, dispatch }: Props) {
+  const { t, name } = useI18n();
   const [picker, setPicker] = useState<PickerKind>(null);
   const info = char ? charByKey.get(char.key) : undefined;
   const update = (patch: Partial<CharConfig>) => dispatch({ type: "updateChar", slot, patch });
@@ -36,8 +34,17 @@ export function CharacterSlot({ slot, char, taken, dispatch }: Props) {
     if (picker === "char")
       return (
         <Picker
-          title="Choose character"
-          items={charItems(taken)}
+          title={t("chooseCharacter")}
+          items={characters
+            .map((c) => ({
+              key: c.key,
+              name: name(c),
+              names: c.names,
+              img: img.char(c.key),
+              accent: RARITY_COLORS[c.rarity],
+              disabled: taken.includes(c.key),
+            }))
+            .sort(byName)}
           onClose={close}
           onPick={(key) => {
             dispatch({ type: "setChar", slot, key });
@@ -48,10 +55,11 @@ export function CharacterSlot({ slot, char, taken, dispatch }: Props) {
     if (picker === "weapon" && char && info)
       return (
         <Picker
-          title={`Choose ${info.weapon}`}
+          title={`${t("chooseWeapon")} (${t(`weapon.${info.weapon}`)})`}
           items={weapons
             .filter((w) => w.type === info.weapon)
-            .map((w) => ({ key: w.key, name: w.name, img: img.weapon(w.key) }))}
+            .map((w) => ({ key: w.key, name: name(w), names: w.names, img: img.weapon(w.key) }))
+            .sort(byName)}
           onClose={close}
           onPick={(key) => {
             update({ weapon: { ...char.weapon, key } });
@@ -63,8 +71,8 @@ export function CharacterSlot({ slot, char, taken, dispatch }: Props) {
       const idx = picker;
       return (
         <Picker
-          title="Choose artifact set"
-          items={sets.map((s) => ({ key: s.key, name: s.name, img: img.set(s.key) }))}
+          title={t("chooseSet")}
+          items={sets.map((s) => ({ key: s.key, name: name(s), names: s.names, img: img.set(s.key) })).sort(byName)}
           onClose={close}
           onPick={(key) => {
             const next: SetChoice[] = [...char.sets];
@@ -83,7 +91,7 @@ export function CharacterSlot({ slot, char, taken, dispatch }: Props) {
       <div className="slot empty">
         <button className="add-char" onClick={() => setPicker("char")}>
           <span>+</span>
-          Add character
+          {t("addCharacter")}
         </button>
         {pickerEl}
       </div>
@@ -98,22 +106,22 @@ export function CharacterSlot({ slot, char, taken, dispatch }: Props) {
   return (
     <div className="slot" style={{ ["--elem" as string]: ELEMENT_COLORS[info.element] }}>
       <div className="slot-head">
-        <button className="portrait" onClick={() => setPicker("char")} title="Change character">
+        <button className="portrait" onClick={() => setPicker("char")} title={t("changeCharacter")}>
           <img src={img.char(char.key)} alt="" />
         </button>
         <div className="slot-title">
-          <strong>{info.name}</strong>
+          <strong>{name(info)}</strong>
           <span className="muted">
-            {info.rarity}★ · {info.element} · {info.weapon}
+            {info.rarity}★ · {t(`elem.${info.element}`)} · {t(`weapon.${info.weapon}`)}
           </span>
         </div>
-        <button className="icon-btn" title="Remove" onClick={() => dispatch({ type: "setChar", slot, key: null })}>
+        <button className="icon-btn" title={t("remove")} onClick={() => dispatch({ type: "setChar", slot, key: null })}>
           ×
         </button>
       </div>
 
       <label className="field">
-        <span>Constellation</span>
+        <span>{t("constellation")}</span>
         <div className="seg">
           {[0, 1, 2, 3, 4, 5, 6].map((n) => (
             <button key={n} className={n === char.cons ? "on" : ""} onClick={() => update({ cons: n })}>
@@ -125,7 +133,7 @@ export function CharacterSlot({ slot, char, taken, dispatch }: Props) {
 
       <div className="row">
         <label className="field">
-          <span>Level</span>
+          <span>{t("level")}</span>
           <LevelInput
             level={char.level}
             max={char.maxLevel}
@@ -134,7 +142,7 @@ export function CharacterSlot({ slot, char, taken, dispatch }: Props) {
           />
         </label>
         <label className="field">
-          <span>Talents (NA/E/Q)</span>
+          <span>{t("talents")}</span>
           <div className="talents">
             {char.talents.map((t, i) => (
               <input
@@ -154,14 +162,14 @@ export function CharacterSlot({ slot, char, taken, dispatch }: Props) {
         </label>
       </div>
 
-      <div className="section-label">Weapon</div>
+      <div className="section-label">{t("weapon")}</div>
       <button className="pick-row" onClick={() => setPicker("weapon")}>
         <img src={img.weapon(char.weapon.key)} alt="" />
-        <span>{weapon?.name ?? char.weapon.key}</span>
+        <span>{weapon ? name(weapon) : char.weapon.key}</span>
       </button>
       <div className="row">
         <label className="field">
-          <span>Refine</span>
+          <span>{t("refine")}</span>
           <div className="seg">
             {[1, 2, 3, 4, 5].map((n) => (
               <button
@@ -175,7 +183,7 @@ export function CharacterSlot({ slot, char, taken, dispatch }: Props) {
           </div>
         </label>
         <label className="field">
-          <span>Level</span>
+          <span>{t("level")}</span>
           <LevelInput
             level={char.weapon.level}
             max={char.weapon.maxLevel}
@@ -185,7 +193,7 @@ export function CharacterSlot({ slot, char, taken, dispatch }: Props) {
         </label>
       </div>
 
-      <div className="section-label">Artifacts</div>
+      <div className="section-label">{t("artifacts")}</div>
       <div className="row">
         <SetButton set={set0} onClick={() => setPicker(0)} onClear={() => update({ sets: [] })} />
         <div className="seg small">
@@ -214,11 +222,11 @@ export function CharacterSlot({ slot, char, taken, dispatch }: Props) {
       <div className="mains">
         {(["sands", "goblet", "circlet"] as const).map((piece) => (
           <label className="field" key={piece}>
-            <span>{piece}</span>
+            <span>{t(piece)}</span>
             <select value={char.main[piece]} onChange={(e) => update({ main: { ...char.main, [piece]: e.target.value } })}>
               {MAIN_OPTIONS[piece].map((s) => (
                 <option key={s} value={s}>
-                  {statByKey.get(s)!.label} ({MAIN_VALUES[s]}
+                  {t(`stat.${s}`)} ({MAIN_VALUES[s]}
                   {statByKey.get(s)!.pct ? "%" : ""})
                 </option>
               ))}
@@ -226,15 +234,15 @@ export function CharacterSlot({ slot, char, taken, dispatch }: Props) {
           </label>
         ))}
       </div>
-      <p className="muted tiny">Flower HP 4780 and Plume ATK 311 are added automatically.</p>
+      <p className="muted tiny">{t("flowerNote")}</p>
 
-      <div className="section-label">Substats (total)</div>
+      <div className="section-label">{t("substats")}</div>
       <div className="subs">
         {SUBSTATS.map((s) => {
           const st = statByKey.get(s)!;
           return (
             <label key={s} className="sub">
-              <span>{st.label.replace("Elemental Mastery", "EM").replace("Energy Recharge", "ER")}</span>
+              <span>{t(SHORT_SUBS.has(s) ? `sub.${s}` : `stat.${s}`)}</span>
               <input
                 type="number"
                 step="0.1"
@@ -259,15 +267,16 @@ export function CharacterSlot({ slot, char, taken, dispatch }: Props) {
 }
 
 function SetButton({ set, onClick, onClear }: { set?: SetChoice; onClick: () => void; onClear: () => void }) {
+  const { t, name } = useI18n();
   const info = set ? setByKey.get(set.key) : undefined;
   return (
     <div className="pick-row set">
       <button onClick={onClick}>
         {info ? <img src={img.set(info.key)} alt="" /> : <span className="ph">+</span>}
-        <span>{info?.name ?? "Choose set"}</span>
+        <span>{info ? name(info) : t("chooseSetShort")}</span>
       </button>
       {info && (
-        <button className="icon-btn" onClick={onClear} title="Clear">
+        <button className="icon-btn" onClick={onClear} title={t("clear")}>
           ×
         </button>
       )}

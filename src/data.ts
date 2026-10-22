@@ -3,9 +3,14 @@ import gamedata from "./data/gamedata.json";
 export type Element = "anemo" | "cryo" | "pyro" | "hydro" | "electro" | "geo" | "dendro" | "none";
 export type WeaponType = "sword" | "claymore" | "polearm" | "bow" | "catalyst";
 
-export interface CharInfo {
+/** English name in `name`; `names` holds it in every gcsim language (en, ru, zh, ja, ko, de, es). */
+interface Named {
   key: string;
   name: string;
+  names: Record<string, string>;
+}
+
+export interface CharInfo extends Named {
   rarity: number;
   element: Element;
   weapon: WeaponType;
@@ -13,17 +18,29 @@ export interface CharInfo {
   /** gcsim caveats per action, e.g. "Need to use attack right before charge." */
   notes: Record<string, string>;
 }
-export interface WeaponInfo {
-  key: string;
-  name: string;
+export interface WeaponInfo extends Named {
   type: WeaponType;
 }
-export interface SetInfo {
-  key: string;
-  name: string;
+export type SetInfo = Named;
+
+/** Case-insensitive match against the key and the name in every language. */
+export function matchesQuery(item: Named, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  // Ignore spaces/punctuation so "hutao" finds "Hu Tao" and "amos" finds "Amos' Bow".
+  const compact = (s: string) => s.replace(/[^\p{L}\p{N}]/gu, "");
+  const cq = compact(q);
+  if (!cq) return true;
+  return (
+    item.key.includes(cq) ||
+    Object.values(item.names).some((n) => {
+      const lower = n.toLowerCase();
+      return lower.includes(q) || compact(lower).includes(cq);
+    })
+  );
 }
 
-export const characters = gamedata.characters as CharInfo[];
+export const characters = gamedata.characters as unknown as CharInfo[];
 export const weapons = gamedata.weapons as WeaponInfo[];
 export const sets = gamedata.sets as SetInfo[];
 
@@ -38,26 +55,26 @@ export const img = {
 };
 
 // gcsim stat keys. `pct` stats are entered in percent in the UI and written as fractions.
-export const STATS: { key: string; label: string; pct: boolean }[] = [
-  { key: "hp", label: "HP", pct: false },
-  { key: "hp%", label: "HP%", pct: true },
-  { key: "atk", label: "ATK", pct: false },
-  { key: "atk%", label: "ATK%", pct: true },
-  { key: "def", label: "DEF", pct: false },
-  { key: "def%", label: "DEF%", pct: true },
-  { key: "em", label: "Elemental Mastery", pct: false },
-  { key: "er", label: "Energy Recharge", pct: true },
-  { key: "cr", label: "Crit Rate", pct: true },
-  { key: "cd", label: "Crit DMG", pct: true },
-  { key: "heal", label: "Healing Bonus", pct: true },
-  { key: "pyro%", label: "Pyro DMG", pct: true },
-  { key: "hydro%", label: "Hydro DMG", pct: true },
-  { key: "cryo%", label: "Cryo DMG", pct: true },
-  { key: "electro%", label: "Electro DMG", pct: true },
-  { key: "anemo%", label: "Anemo DMG", pct: true },
-  { key: "geo%", label: "Geo DMG", pct: true },
-  { key: "dendro%", label: "Dendro DMG", pct: true },
-  { key: "phys%", label: "Physical DMG", pct: true },
+export const STATS: { key: string; pct: boolean }[] = [
+  { key: "hp", pct: false },
+  { key: "hp%", pct: true },
+  { key: "atk", pct: false },
+  { key: "atk%", pct: true },
+  { key: "def", pct: false },
+  { key: "def%", pct: true },
+  { key: "em", pct: false },
+  { key: "er", pct: true },
+  { key: "cr", pct: true },
+  { key: "cd", pct: true },
+  { key: "heal", pct: true },
+  { key: "pyro%", pct: true },
+  { key: "hydro%", pct: true },
+  { key: "cryo%", pct: true },
+  { key: "electro%", pct: true },
+  { key: "anemo%", pct: true },
+  { key: "geo%", pct: true },
+  { key: "dendro%", pct: true },
+  { key: "phys%", pct: true },
 ];
 export const statByKey = new Map(STATS.map((s) => [s.key, s]));
 
@@ -76,18 +93,6 @@ export const MAIN_OPTIONS = {
   circlet: ["atk%", "hp%", "def%", "em", "cr", "cd", "heal"],
 };
 
-export const ACTION_LABELS: Record<string, string> = {
-  attack: "Attack",
-  charge: "Charged",
-  aim: "Aim",
-  high_plunge: "High Plunge",
-  low_plunge: "Low Plunge",
-  skill: "Skill (E)",
-  burst: "Burst (Q)",
-  dash: "Dash",
-  jump: "Jump",
-  walk: "Walk",
-};
 // Actions that can be repeated with gcsim's `action:N` syntax.
 export const COUNTABLE = new Set(["attack", "charge", "aim"]);
 

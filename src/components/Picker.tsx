@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { matchesQuery } from "../data";
+import { useI18n } from "../i18n";
 
 export interface PickerItem {
   key: string;
+  /** Display name in the current language. */
   name: string;
+  /** Names in all languages, used for search. */
+  names: Record<string, string>;
   img: string;
   /** Optional accent (rarity/element) for the tile background. */
   accent?: string;
@@ -17,29 +22,26 @@ interface Props {
 }
 
 export function Picker({ title, items, onPick, onClose }: Props) {
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => input.current?.focus(), []);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((i) => i.name.toLowerCase().includes(q) || i.key.includes(q.replace(/[^a-z0-9]/g, "")));
-  }, [items, query]);
+  const filtered = useMemo(() => items.filter((i) => matchesQuery(i, query)), [items, query]);
 
   return (
     <div className="overlay" onMouseDown={onClose}>
       <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h3>{title}</h3>
-          <button className="icon-btn" onClick={onClose} aria-label="Close">
+          <button className="icon-btn" onClick={onClose} aria-label={t("close")}>
             ×
           </button>
         </div>
         <input
           ref={input}
           className="search"
-          placeholder="Search by name…"
+          placeholder={t("searchPlaceholder")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
@@ -64,7 +66,7 @@ export function Picker({ title, items, onPick, onClose }: Props) {
               <span>{i.name}</span>
             </button>
           ))}
-          {!filtered.length && <p className="muted">Nothing found</p>}
+          {!filtered.length && <p className="muted">{t("nothingFound")}</p>}
         </div>
       </div>
     </div>

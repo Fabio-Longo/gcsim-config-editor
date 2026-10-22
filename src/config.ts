@@ -44,10 +44,14 @@ export function generateConfig(state: State): string {
   );
 
   const rot = state.rotation;
-  const active = rot[0]?.char ?? team[0]?.key;
+  const active = rot.find((r) => r.char)?.char ?? team[0]?.key;
   if (active) out.push(`active ${active};`, "");
 
-  const actionLines = rot.map((r) => `${r.char} ${r.action}${r.count > 1 ? `:${r.count}` : ""};`);
+  const actionLines = rot.map((r) =>
+    r.action === "wait"
+      ? `wait(${Math.round((r.seconds ?? 1) * 60)}); # ${r.seconds ?? 1}s` // gcsim waits in frames (60/s)
+      : `${r.char} ${r.action}${r.count > 1 ? `:${r.count}` : ""};`,
+  );
   if (state.settings.loop && actionLines.length) {
     out.push("while 1 {", ...actionLines.map((l) => `  ${l}`), "}");
   } else {

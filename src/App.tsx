@@ -2,9 +2,11 @@ import { useMemo, useState } from "react";
 import { CharacterSlot } from "./components/CharacterSlot";
 import { Timeline } from "./components/Timeline";
 import { generateConfig } from "./config";
+import { LANGS, useI18n, type Lang } from "./i18n";
 import { useAppState, type CharConfig } from "./state";
 
 export function App() {
+  const { t, lang, setLang } = useI18n();
   const [state, dispatch] = useAppState();
   const [copied, setCopied] = useState(false);
   const config = useMemo(() => generateConfig(state), [state]);
@@ -27,18 +29,24 @@ export function App() {
   return (
     <div className="app">
       <header>
-        <h1>gcsim config editor</h1>
-        <button
-          className="ghost"
-          onClick={() => confirm("Clear team and rotation?") && dispatch({ type: "reset" })}
-        >
-          Reset
-        </button>
+        <h1>{t("title")}</h1>
+        <div className="header-actions">
+          <select value={lang} onChange={(e) => setLang(e.target.value as Lang)} aria-label="Language">
+            {LANGS.map((l) => (
+              <option key={l.code} value={l.code}>
+                {l.label}
+              </option>
+            ))}
+          </select>
+          <button className="ghost" onClick={() => confirm(t("resetConfirm")) && dispatch({ type: "reset" })}>
+            {t("reset")}
+          </button>
+        </div>
       </header>
 
       <main>
         <section>
-          <h2>Team</h2>
+          <h2>{t("team")}</h2>
           <div className="team">
             {state.team.map((c, i) => (
               <CharacterSlot key={i} slot={i} char={c} taken={taken} dispatch={dispatch} />
@@ -48,15 +56,15 @@ export function App() {
 
         <section>
           <div className="section-head">
-            <h2>Rotation</h2>
-            <span className="muted">Drag cards to reorder</span>
+            <h2>{t("rotation")}</h2>
+            <span className="muted">{t("dragHint")}</span>
             <label className="check">
               <input
                 type="checkbox"
                 checked={state.settings.loop}
                 onChange={(e) => dispatch({ type: "updateSettings", patch: { loop: e.target.checked } })}
               />
-              Loop (while 1)
+              {t("loop")}
             </label>
           </div>
           <Timeline team={team} rotation={state.rotation} dispatch={dispatch} />
@@ -64,9 +72,9 @@ export function App() {
 
         <section>
           <div className="section-head">
-            <h2>Config</h2>
+            <h2>{t("config")}</h2>
             <label className="check">
-              Iterations
+              {t("iterations")}
               <input
                 type="number"
                 min={1}
@@ -75,7 +83,7 @@ export function App() {
               />
             </label>
             <label className="check">
-              Duration, s
+              {t("duration")}
               <input
                 type="number"
                 min={1}
@@ -84,8 +92,8 @@ export function App() {
               />
             </label>
             <div className="spacer" />
-            <button onClick={copy}>{copied ? "Copied!" : "Copy"}</button>
-            <button onClick={download}>Download</button>
+            <button onClick={copy}>{copied ? t("copied") : t("copy")}</button>
+            <button onClick={download}>{t("download")}</button>
           </div>
           <pre className="output">{config}</pre>
         </section>
