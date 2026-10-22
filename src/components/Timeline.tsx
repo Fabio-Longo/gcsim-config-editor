@@ -1,94 +1,203 @@
-import { useState, type Dispatch, type KeyboardEvent, type PointerEvent } from "react";
 import {
-  closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent,
+  createContext, useContext, useRef, useState, type Dispatch, type HTMLAttributes, type KeyboardEvent, type PointerEvent,
+  type ReactNode,
+} from "react";
+import {
+  DndContext, DragOverlay, MeasuringStrategy, PointerSensor, pointerWithin, useDraggable, useDroppable, useSensor,
+  useSensors, type CollisionDetection, type DragEndEvent, type DragMoveEvent, type UniqueIdentifier,
 } from "@dnd-kit/core";
-import {
-  arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordinates, useSortable,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { CAN_SKIP, charByKey, COUNTABLE, ELEMENT_COLORS, img } from "../data";
 import { useI18n } from "../i18n";
-import type { Action, CharConfig, RotationAction } from "../state";
+import {
+  findContainer, findNode, newBlock, ROOT, subtreeIds, uid, type ActionNode, type BlockKind, type Branch, type IfNode,
+  type RNode,
+} from "../rotation";
+import type { Action, CharConfig } from "../state";
 
 interface Props {
   team: CharConfig[];
-  rotation: RotationAction[];
+  rotation: RNode[];
   dispatch: Dispatch<Action>;
 }
 
+/** Where a dragged node would land: index inside container `cid`. */
+interface DropTarget {
+  cid: string;
+  index: number;
+}
+
+interface Ctx {
+  dispatch: Dispatch<Action>;
+  drop: DropTarget | null;
+  openAdd: (cid: string) => void;
+}
+const RotationCtx = createContext<Ctx>(null!);
+
+// Droppable ids: a node uses its own id, a container (lane) uses "c:" + its id.
+const laneId = (cid: string) => `c:${cid}`;
+
 const clampSeconds = (v: number) => Math.max(0.1, Math.min(60, Math.round((Number.isFinite(v) ? v : 1) * 10) / 10));
+const stop = (e: PointerEvent | KeyboardEvent) => e.stopPropagation();
 
 export function Timeline({ team, rotation, dispatch }: Props) {
-  const { t } = useI18n();
-  const [adding, setAdding] = useState(false);
+  const [addTo, setAddTo] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [drop, setDrop] = useState<DropTarget | null>(null);
+  // Droppables inside the dragged node: a block can't be dropped into itself.
+  const forbidden = useRef(new Set<string>());
+
   const sensors = useSensors(
-    // Small distance so clicks on card buttons don't start a drag.
+    // Small distance so clicks on card buttons and inputs don't start a drag.
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const onDragEnd = ({ active, over }: DragEndEvent) => {
-    if (!over || active.id === over.id) return;
-    const from = rotation.findIndex((r) => r.id === active.id);
-    const to = rotation.findIndex((r) => r.id === over.id);
-    dispatch({ type: "setRotation", rotation: arrayMove(rotation, from, to) });
+  // The innermost droppable under the pointer wins, so nested lanes beat the blocks around them.
+  const collision: CollisionDetection = (args) => {
+    const area = (id: UniqueIdentifier) => {
+      const r = args.droppableRects.get(id);
+      return r ? r.width * r.height : Infinity;
+    };
+    return pointerWithin(args)
+      .filter((c) => !forbidden.current.has(String(c.id).replace(/^c:/, "")))
+      .sort((a, b) => area(a.id) - area(b.id))
+      .slice(0, 1);
   };
 
+  const computeDrop = (e: DragMoveEvent | DragEndEvent): DropTarget | null => {
+    if (!e.over) return null;
+    const x = (e.activatorEvent as globalThis.PointerEvent).clientX + e.delta.x;
+    const id = String(e.over.id);
+    if (id.startsWith("c:")) {
+      // Over a lane's free space: insert after every child whose center is left of the pointer.
+      const cid = id.slice(2);
+      const list = findContainer(rotation, cid) ?? [];
+      let index = 0;
+      list.forEach((n, i) => {
+        const r = document.querySelector(`[data-node="${n.id}"]`)?.getBoundingClientRect();
+        if (r && x > r.left + r.width / 2) index = i + 1;
+      });
+      return { cid, index };
+    }
+    const hit = findNode(rotation, id);
+    if (!hit) return null;
+    const r = e.over.rect;
+    return { cid: hit.containerId, index: hit.index + (x > r.left + r.width / 2 ? 1 : 0) };
+  };
+
+  const endDrag = () => {
+    setActiveId(null);
+    setDrop(null);
+  };
+
+  const active = activeId ? findNode(rotation, activeId)?.node : undefined;
+
   return (
-    <div className="timeline">
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-        <SortableContext items={rotation.map((r) => r.id)} strategy={rectSortingStrategy}>
-          {rotation.map((r, i) => (
-            <ActionCard key={r.id} index={i} item={r} dispatch={dispatch} />
-          ))}
-        </SortableContext>
-      </DndContext>
-      <button
-        className="add-action"
-        onClick={() => setAdding(true)}
-        disabled={!team.length}
-        title={team.length ? t("addAction") : t("addCharFirst")}
+    <RotationCtx.Provider value={{ dispatch, drop, openAdd: setAddTo }}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={collision}
+        measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+        onDragStart={(e) => {
+          const hit = findNode(rotation, String(e.active.id));
+          forbidden.current = hit ? subtreeIds(hit.node) : new Set();
+          setActiveId(String(e.active.id));
+        }}
+        onDragMove={(e) => {
+          const next = computeDrop(e);
+          if (next?.cid !== drop?.cid || next?.index !== drop?.index) setDrop(next);
+        }}
+        onDragEnd={(e) => {
+          // Recompute at release: a quick flick may end before any drag-move event updated `drop`.
+          const target = computeDrop(e) ?? drop;
+          if (target) dispatch({ type: "moveNode", id: String(e.active.id), containerId: target.cid, index: target.index });
+          endDrag();
+        }}
+        onDragCancel={endDrag}
       >
+        <div className="rotation-panel">
+          <Lane cid={ROOT} nodes={rotation} />
+        </div>
+        <DragOverlay dropAnimation={null}>{active ? <DragGhost node={active} /> : null}</DragOverlay>
+      </DndContext>
+      {addTo && <AddDialog containerId={addTo} team={team} dispatch={dispatch} onClose={() => setAddTo(null)} />}
+    </RotationCtx.Provider>
+  );
+}
+
+/** A horizontal row of nodes; also a drop zone. */
+function Lane({ cid, nodes }: { cid: string; nodes: RNode[] }) {
+  const { t } = useI18n();
+  const { drop, openAdd } = useContext(RotationCtx);
+  const { setNodeRef } = useDroppable({ id: laneId(cid) });
+  const target = drop?.cid === cid ? drop.index : -1;
+  return (
+    <div ref={setNodeRef} className={`lane${target >= 0 ? " drop-target" : ""}`}>
+      {nodes.map((n, i) => (
+        <NodeView key={n.id} node={n} dropBefore={target === i} dropAfter={target === nodes.length && i === nodes.length - 1} />
+      ))}
+      <button className="add-action" onClick={() => openAdd(cid)} title={t("addAction")}>
         +
       </button>
-      {adding && <AddActionDialog team={team} dispatch={dispatch} onClose={() => setAdding(false)} />}
     </div>
   );
 }
 
-function ActionCard({ item, index, dispatch }: { item: RotationAction; index: number; dispatch: Dispatch<Action> }) {
-  const { t, name } = useI18n();
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
-  const isWait = item.action === "wait";
-  const info = charByKey.get(item.char);
-  const stop = (e: PointerEvent | KeyboardEvent) => e.stopPropagation();
+/** Drag listeners + a11y attributes, spread onto whatever element should start the drag. */
+type Handle = HTMLAttributes<HTMLElement>;
+
+function NodeView({ node, dropBefore, dropAfter }: { node: RNode; dropBefore: boolean; dropAfter: boolean }) {
+  const drag = useDraggable({ id: node.id });
+  const dropZone = useDroppable({ id: node.id });
+  const handle = { ...drag.listeners, ...drag.attributes } as unknown as Handle;
+  const cls = ["node", drag.isDragging && "dragging-src", dropBefore && "drop-before", dropAfter && "drop-after"]
+    .filter(Boolean)
+    .join(" ");
   return (
     <div
-      ref={setNodeRef}
-      className={`card${isDragging ? " dragging" : ""}${isWait ? " wait" : ""}`}
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition,
-        ["--elem" as string]: isWait ? "var(--muted)" : ELEMENT_COLORS[info?.element ?? "none"],
+      ref={(el) => {
+        drag.setNodeRef(el);
+        dropZone.setNodeRef(el);
       }}
-      {...attributes}
-      {...listeners}
+      data-node={node.id}
+      className={cls}
     >
-      <span className="card-index">{index + 1}</span>
-      <button
-        className="card-remove"
-        title={t("remove")}
-        onPointerDown={stop}
-        onClick={() => dispatch({ type: "removeAction", id: item.id })}
-      >
+      {node.kind === "action" ? <ActionCard item={node} handle={handle} /> : <BlockView node={node} handle={handle} />}
+    </div>
+  );
+}
+
+function NodeButtons({ id }: { id: string }) {
+  const { t } = useI18n();
+  const { dispatch } = useContext(RotationCtx);
+  return (
+    <>
+      <button className="mini" title={t("duplicate")} onPointerDown={stop} onClick={() => dispatch({ type: "duplicateNode", id })}>
+        ⧉
+      </button>
+      <button className="mini danger" title={t("remove")} onPointerDown={stop} onClick={() => dispatch({ type: "removeNode", id })}>
         ×
       </button>
-      {isWait ? (
-        <div className="wait-icon">⏳</div>
-      ) : (
-        <img src={img.char(item.char)} alt="" draggable={false} />
-      )}
-      <div className="card-name">{isWait ? " " : info ? name(info) : item.char}</div>
+    </>
+  );
+}
+
+function ActionCard({ item, handle }: { item: ActionNode; handle?: Handle }) {
+  const { t, name } = useI18n();
+  const { dispatch } = useContext(RotationCtx);
+  const update = (patch: Partial<ActionNode>) => dispatch({ type: "updateNode", id: item.id, patch });
+  const isWait = item.action === "wait";
+  const info = charByKey.get(item.char);
+  return (
+    <div
+      className={`card${isWait ? " wait" : ""}`}
+      style={{ ["--elem" as string]: isWait ? "var(--muted)" : ELEMENT_COLORS[info?.element ?? "none"] }}
+      {...handle}
+    >
+      <div className="card-tools">
+        <NodeButtons id={item.id} />
+      </div>
+      {isWait ? <div className="wait-icon">⏳</div> : <img src={img.char(item.char)} alt="" draggable={false} />}
+      <div className="card-name">{isWait ? "\u00a0" : info ? name(info) : item.char}</div>
       <div className="card-action">{t(`action.${item.action}`)}</div>
       {isWait && (
         <div className="counter" onPointerDown={stop} onKeyDown={stop}>
@@ -98,7 +207,7 @@ function ActionCard({ item, index, dispatch }: { item: RotationAction; index: nu
             max={60}
             step={0.1}
             value={item.seconds ?? 1}
-            onChange={(e) => dispatch({ type: "updateAction", id: item.id, patch: { seconds: clampSeconds(+e.target.value) } })}
+            onChange={(e) => update({ seconds: clampSeconds(+e.target.value) })}
           />
           <span>{t("seconds")}</span>
         </div>
@@ -108,43 +217,153 @@ function ActionCard({ item, index, dispatch }: { item: RotationAction; index: nu
           <input
             type="checkbox"
             checked={!!item.skipOnCooldown}
-            onChange={(e) => dispatch({ type: "updateAction", id: item.id, patch: { skipOnCooldown: e.target.checked } })}
+            onChange={(e) => update({ skipOnCooldown: e.target.checked })}
           />
           <span>{t("skipOnCooldown")}</span>
         </label>
       )}
       {COUNTABLE.has(item.action) && (
         <div className="counter" onPointerDown={stop}>
-          <button
-            onClick={() => dispatch({ type: "updateAction", id: item.id, patch: { count: Math.max(1, item.count - 1) } })}
-          >
-            −
-          </button>
+          <button onClick={() => update({ count: Math.max(1, item.count - 1) })}>−</button>
           <span>×{item.count}</span>
-          <button onClick={() => dispatch({ type: "updateAction", id: item.id, patch: { count: Math.min(10, item.count + 1) } })}>
-            +
-          </button>
+          <button onClick={() => update({ count: Math.min(10, item.count + 1) })}>+</button>
         </div>
       )}
     </div>
   );
 }
 
-function AddActionDialog({ team, dispatch, onClose }: { team: CharConfig[]; dispatch: Dispatch<Action>; onClose: () => void }) {
+function CondInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { t } = useI18n();
+  return (
+    <input
+      className="cond"
+      value={value}
+      placeholder={t("condPlaceholder")}
+      size={Math.max(18, value.length + 1)}
+      spellCheck={false}
+      onPointerDown={stop}
+      onKeyDown={stop}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  );
+}
+
+function BlockHead({ handle, label, children }: { handle: Handle; label: string; children?: ReactNode }) {
+  return (
+    <div className="block-head">
+      <span className="grip" {...handle}>
+        ⠿ {label}
+      </span>
+      {children}
+    </div>
+  );
+}
+
+function BlockView({ node, handle }: { node: Exclude<RNode, ActionNode>; handle: Handle }) {
+  const { t } = useI18n();
+  const { dispatch } = useContext(RotationCtx);
+  if (node.kind === "group")
+    return (
+      <div className="block group">
+        <BlockHead handle={handle} label={t("block.group")}>
+          <span className="spacer" />
+          <NodeButtons id={node.id} />
+        </BlockHead>
+        <Lane cid={node.id} nodes={node.children} />
+      </div>
+    );
+  if (node.kind === "while")
+    return (
+      <div className="block while">
+        <BlockHead handle={handle} label="while">
+          <CondInput value={node.cond} onChange={(cond) => dispatch({ type: "updateNode", id: node.id, patch: { cond } })} />
+          <span className="spacer" />
+          <NodeButtons id={node.id} />
+        </BlockHead>
+        <Lane cid={node.id} nodes={node.children} />
+      </div>
+    );
+  return <IfView node={node} handle={handle} />;
+}
+
+function IfView({ node, handle }: { node: IfNode; handle: Handle }) {
+  const { t } = useI18n();
+  const { dispatch } = useContext(RotationCtx);
+  const removeBranch = (b: Branch) => (
+    <button
+      className="mini danger"
+      title={t("remove")}
+      onPointerDown={stop}
+      onClick={() => dispatch({ type: "removeBranch", ifId: node.id, branchId: b.id })}
+    >
+      ×
+    </button>
+  );
+  return (
+    <div className="block if">
+      {node.branches.map((b, i) => (
+        <div className="branch" key={b.id}>
+          {i === 0 ? (
+            <BlockHead handle={handle} label="if">
+              <CondInput value={b.cond} onChange={(cond) => dispatch({ type: "setBranchCond", ifId: node.id, branchId: b.id, cond })} />
+              <span className="spacer" />
+              <NodeButtons id={node.id} />
+            </BlockHead>
+          ) : (
+            <div className="block-head">
+              <span className="branch-label">elif</span>
+              <CondInput value={b.cond} onChange={(cond) => dispatch({ type: "setBranchCond", ifId: node.id, branchId: b.id, cond })} />
+              <span className="spacer" />
+              {removeBranch(b)}
+            </div>
+          )}
+          <Lane cid={b.id} nodes={b.children} />
+        </div>
+      ))}
+      {node.elseBranch && (
+        <div className="branch">
+          <div className="block-head">
+            <span className="branch-label">else</span>
+            <span className="spacer" />
+            {removeBranch(node.elseBranch)}
+          </div>
+          <Lane cid={node.elseBranch.id} nodes={node.elseBranch.children} />
+        </div>
+      )}
+      <div className="if-foot">
+        <button onClick={() => dispatch({ type: "addBranch", ifId: node.id, branch: "elif" })}>+ elif</button>
+        {!node.elseBranch && <button onClick={() => dispatch({ type: "addBranch", ifId: node.id, branch: "else" })}>+ else</button>}
+      </div>
+    </div>
+  );
+}
+
+/** What follows the pointer while dragging. */
+function DragGhost({ node }: { node: RNode }) {
+  const { t } = useI18n();
+  if (node.kind === "action") return <ActionCard item={node} />;
+  const label = node.kind === "group" ? t("block.group") : node.kind === "while" ? `while ${node.cond}` : `if ${node.branches[0].cond}`;
+  return <div className="drag-ghost">⠿ {label}</div>;
+}
+
+function AddDialog({
+  containerId, team, dispatch, onClose,
+}: { containerId: string; team: CharConfig[]; dispatch: Dispatch<Action>; onClose: () => void }) {
   const { t, name } = useI18n();
   const [char, setChar] = useState<string | null>(team.length === 1 ? team[0].key : null);
   const [count, setCount] = useState(1);
   const [seconds, setSeconds] = useState(1);
   const info = char ? charByKey.get(char) : undefined;
 
-  const add = (action: string) => {
-    dispatch({ type: "addAction", char: char!, action, count: COUNTABLE.has(action) ? count : 1 });
+  const addNode = (node: RNode) => {
+    dispatch({ type: "addNode", containerId, node });
     onClose();
   };
-  const addWait = () => {
-    dispatch({ type: "addAction", char: "", action: "wait", count: 1, seconds: clampSeconds(seconds) });
-    onClose();
-  };
+  const add = (action: string) =>
+    addNode({ id: uid(), kind: "action", char: char!, action, count: COUNTABLE.has(action) ? count : 1 });
+  const addWait = () => addNode({ id: uid(), kind: "action", char: "", action: "wait", count: 1, seconds: clampSeconds(seconds) });
+  const addBlock = (kind: BlockKind) => addNode(newBlock(kind));
 
   return (
     <div className="overlay" onMouseDown={onClose}>
@@ -156,17 +375,21 @@ function AddActionDialog({ team, dispatch, onClose }: { team: CharConfig[]; disp
           </button>
         </div>
         {!info ? (
-          <div className="grid">
-            {team.map((c) => {
-              const ci = charByKey.get(c.key);
-              return (
-                <button key={c.key} className="tile" onClick={() => setChar(c.key)}>
-                  <img src={img.char(c.key)} alt="" />
-                  <span>{ci ? name(ci) : c.key}</span>
-                </button>
-              );
-            })}
-          </div>
+          team.length ? (
+            <div className="grid">
+              {team.map((c) => {
+                const ci = charByKey.get(c.key);
+                return (
+                  <button key={c.key} className="tile" onClick={() => setChar(c.key)}>
+                    <img src={img.char(c.key)} alt="" />
+                    <span>{ci ? name(ci) : c.key}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="muted">{t("addCharFirst")}</p>
+          )
         ) : (
           <>
             <div className="action-list">
@@ -217,6 +440,12 @@ function AddActionDialog({ team, dispatch, onClose }: { team: CharConfig[]; disp
           />
           <span>{t("seconds")}</span>
           <button onClick={addWait}>⏳ {t("action.wait")}</button>
+        </div>
+        <div className="wait-row">
+          <span>{t("orBlock")}</span>
+          <button onClick={() => addBlock("group")}>{t("block.group")}</button>
+          <button onClick={() => addBlock("if")}>if / else</button>
+          <button onClick={() => addBlock("while")}>while</button>
         </div>
       </div>
     </div>

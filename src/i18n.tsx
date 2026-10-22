@@ -12,7 +12,10 @@ const dict = {
   resetConfirm: { en: "Clear team and rotation?", ru: "Очистить команду и ротацию?" },
   team: { en: "Team", ru: "Команда" },
   rotation: { en: "Rotation", ru: "Ротация" },
-  dragHint: { en: "Drag cards to reorder", ru: "Перетаскивайте карточки, чтобы менять порядок" },
+  dragHint: {
+    en: "Drag cards and blocks (by ⠿) to reorder or move them into other blocks",
+    ru: "Перетаскивайте карточки и блоки (за ⠿), в том числе внутрь других блоков",
+  },
   loop: { en: "Loop (while 1)", ru: "Повторять (while 1)" },
   config: { en: "Config", ru: "Конфиг" },
   iterations: { en: "Iterations", ru: "Итерации" },
@@ -53,6 +56,10 @@ const dict = {
   orWait: { en: "…or wait", ru: "…или подождать" },
   seconds: { en: "s", ru: "с" },
   add: { en: "Add", ru: "Добавить" },
+  duplicate: { en: "Duplicate", ru: "Дублировать" },
+  orBlock: { en: "…or a block", ru: "…или блок" },
+  "block.group": { en: "Action block", ru: "Блок действий" },
+  condPlaceholder: { en: "condition, e.g. .xiangling.burst.ready", ru: "условие, напр. .xiangling.burst.ready" },
   skipOnCooldown: { en: "Skip if on cooldown", ru: "Пропустить, если на перезарядке" },
   notesFromGcsim: { en: "gcsim notes:", ru: "Примечания gcsim:" },
 

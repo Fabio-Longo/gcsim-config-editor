@@ -1,4 +1,5 @@
 import { CAN_SKIP, STATS, statByKey } from "./data";
+import { containersOf, type ActionNode, type RNode } from "./rotation";
 import type { CharConfig, State } from "./state";
 
 const fmt = (key: string, uiValue: number) => {
@@ -31,21 +32,57 @@ export function generateConfig(state: State): string {
     "",
   );
 
-  const rot = state.rotation;
-  const active = rot.find((r) => r.char)?.char ?? team[0]?.key;
+  const active = firstChar(state.rotation) ?? team[0]?.key;
   if (active) out.push(`active ${active};`, "");
 
-  const actionLines = rot.map((r) =>
-    r.action === "wait"
-      ? `wait(${Math.round((r.seconds ?? 1) * 60)}); # ${r.seconds ?? 1}s` // gcsim waits in frames (60/s)
-      : r.skipOnCooldown && CAN_SKIP.has(r.action)
-        ? `if .${r.char}.${r.action}.ready { ${r.char} ${r.action}; }`
-        : `${r.char} ${r.action}${r.count > 1 ? `:${r.count}` : ""};`,
-  );
-  if (state.settings.loop && actionLines.length) {
-    out.push("while 1 {", ...actionLines.map((l) => `  ${l}`), "}");
-  } else {
-    out.push(...actionLines);
-  }
+  const body = nodeLines(state.rotation);
+  if (state.settings.loop && body.length) out.push("while 1 {", ...indent(body), "}");
+  else out.push(...body);
   return out.join("\n") + "\n";
+}
+
+const indent = (lines: string[]) => lines.map((l) => `  ${l}`);
+
+// Opening line of a while/if/else-if. An empty condition would be a syntax error;
+// "0" keeps the config valid and the block inert.
+const head = (keyword: string, cond: string) =>
+  cond.trim() ? `${keyword} ${cond.trim()} {` : `${keyword} 0 { # TODO: condition`;
+
+function actionLine(r: ActionNode): string {
+  if (r.action === "wait") return `wait(${Math.round((r.seconds ?? 1) * 60)}); # ${r.seconds ?? 1}s`; // gcsim waits in frames (60/s)
+  if (r.skipOnCooldown && CAN_SKIP.has(r.action)) return `if .${r.char}.${r.action}.ready { ${r.char} ${r.action}; }`;
+  return `${r.char} ${r.action}${r.count > 1 ? `:${r.count}` : ""};`;
+}
+
+function nodeLines(nodes: RNode[]): string[] {
+  return nodes.flatMap((n): string[] => {
+    switch (n.kind) {
+      case "action":
+        return [actionLine(n)];
+      case "group":
+        // gcsim has no plain blocks; a group only groups cards in the editor.
+        return nodeLines(n.children);
+      case "while":
+        return [head("while", n.cond), ...indent(nodeLines(n.children)), "}"];
+      case "if": {
+        const lines = n.branches.flatMap((b, i) => [
+          head(i ? "} else if" : "if", b.cond),
+          ...indent(nodeLines(b.children)),
+        ]);
+        if (n.elseBranch) lines.push("} else {", ...indent(nodeLines(n.elseBranch.children)));
+        return [...lines, "}"];
+      }
+    }
+  });
+}
+
+/** First character used by an action, depth-first: gcsim needs it as the active character. */
+function firstChar(nodes: RNode[]): string | undefined {
+  for (const n of nodes) {
+    if (n.kind === "action" && n.char) return n.char;
+    for (const [, list] of containersOf(n)) {
+      const c = firstChar(list);
+      if (c) return c;
+    }
+  }
 }

@@ -89,27 +89,51 @@ main > section > h2, .section-head { margin-bottom: 10px; }
 .sub input { text-align: right; }
 .sub em { font-style: normal; }
 
-/* Timeline */
-.timeline {
-  display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; background: var(--panel);
-  border: 1px solid var(--border); border-radius: 10px; padding: 12px; min-height: 140px;
+/* Rotation: one horizontally scrollable panel; lanes never wrap, blocks nest. */
+.rotation-panel {
+  overflow-x: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px;
 }
+.lane { display: flex; flex-wrap: nowrap; gap: 10px; align-items: flex-start; width: max-content; padding: 4px; border-radius: 8px; }
+.rotation-panel > .lane { min-width: 100%; min-height: 140px; }
+.lane.drop-target { outline: 2px dashed var(--accent); outline-offset: 2px; }
+.node { position: relative; flex: none; }
+.node.dragging-src { opacity: 0.35; }
+/* Insertion marker drawn outside the box so it never shifts the layout. */
+.node.drop-before::before, .node.drop-after::after {
+  content: ""; position: absolute; top: 0; bottom: 0; width: 4px; border-radius: 2px; background: var(--accent);
+}
+.node.drop-before::before { left: -7px; }
+.node.drop-after::after { right: -7px; }
+.block { display: flex; flex-direction: column; border: 1px solid var(--border); border-left-width: 3px; border-radius: 10px; background: #ffffff05; }
+.block.group { border-color: #4f7fa8; }
+.block.while { border-color: #8a6bbf; }
+.block.if { border-color: #b8823e; }
+.block-head { display: flex; align-items: center; gap: 6px; padding: 5px 8px; font-size: 12px; }
+.grip { display: flex; align-items: center; gap: 4px; font-weight: 600; cursor: grab; user-select: none; touch-action: none; white-space: nowrap; }
+.branch-label { font-weight: 600; padding-left: 14px; }
+.cond { font-family: ui-monospace, Consolas, monospace; font-size: 12px; padding: 3px 6px; }
+.block .lane { width: auto; padding: 6px 8px 8px; }
+.branch + .branch { border-top: 1px dashed var(--border); }
+.if-foot { display: flex; gap: 6px; padding: 6px 8px; border-top: 1px solid var(--border); }
+.if-foot button { font-size: 12px; padding: 2px 10px; }
+.mini { background: transparent; border: none; padding: 0 4px; color: var(--muted); font-size: 14px; line-height: 1; }
+.mini:hover:not(:disabled) { color: var(--text); }
+.mini.danger:hover { color: var(--danger); }
+.drag-ghost { background: var(--panel-2); border: 1px solid var(--accent); border-radius: 8px; padding: 8px 12px; font-weight: 600; box-shadow: 0 8px 20px #0008; white-space: nowrap; }
 .card {
   position: relative; width: 104px; background: var(--panel-2); border: 1px solid var(--border);
   border-bottom: 3px solid var(--elem); border-radius: 8px; padding: 8px 6px 6px;
   display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: grab; user-select: none; touch-action: none;
 }
-.card.dragging { z-index: 10; opacity: 0.85; cursor: grabbing; box-shadow: 0 8px 20px #0008; }
+
 .card img { width: 56px; height: 56px; border-radius: 50%; background: var(--bg); object-fit: cover; }
 .card-name { font-size: 11px; color: var(--muted); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .card-action { font-weight: 600; font-size: 13px; text-align: center; }
-.card-index { position: absolute; top: 4px; left: 6px; font-size: 11px; color: var(--muted); }
-.card-remove { position: absolute; top: 2px; right: 2px; background: transparent; border: none; padding: 0 5px; color: var(--muted); font-size: 15px; }
-.card-remove:hover { color: var(--danger); }
+.card-tools { display: flex; justify-content: space-between; width: 100%; margin: -4px 0 -2px; }
 .counter { display: flex; align-items: center; gap: 4px; font-size: 12px; }
 .counter button { padding: 0 6px; line-height: 18px; }
 .add-action {
-  width: 104px; min-height: 120px; font-size: 32px; color: var(--muted); background: transparent; border: 2px dashed var(--border);
+  flex: none; width: 104px; min-height: 120px; font-size: 32px; color: var(--muted); background: transparent; border: 2px dashed var(--border);
 }
 
 /* Output */
@@ -149,3 +173,4 @@ main > section > h2, .section-head { margin-bottom: 10px; }
 .skip { display: flex; align-items: flex-start; gap: 4px; font-size: 10px; line-height: 1.2; color: var(--muted); cursor: pointer; }
 .skip input { margin: 0; flex: none; }
 .sub span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.block .add-action { width: 44px; min-height: 120px; font-size: 24px; }

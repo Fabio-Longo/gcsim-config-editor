@@ -1,5 +1,9 @@
 import { useEffect, useReducer } from "react";
 import { charByKey, MAIN_VALUES, weapons, type CharInfo } from "./data";
+import {
+  duplicateNode, findContainer, insertNode, mapIf, migrateRotation, moveNode, removeChar, removeNode, uid, updateNode,
+  type IfNode, type RNode,
+} from "./rotation";
 
 export interface SetChoice {
   key: string;
@@ -18,18 +22,6 @@ export interface CharConfig {
   stats: Record<string, number>;
 }
 
-export interface RotationAction {
-  id: string;
-  /** Empty for "wait", which belongs to no character. */
-  char: string;
-  action: string;
-  count: number;
-  /** Duration of a "wait" step. */
-  seconds?: number;
-  /** skill/burst only: emit `if .char.<action>.ready { ... }` so the step is skipped while on cooldown. */
-  skipOnCooldown?: boolean;
-}
-
 export interface Settings {
   iterations: number;
   duration: number;
@@ -38,17 +30,21 @@ export interface Settings {
 
 export interface State {
   team: (CharConfig | null)[];
-  rotation: RotationAction[];
+  rotation: RNode[];
   settings: Settings;
 }
 
 export type Action =
   | { type: "setChar"; slot: number; key: string | null }
   | { type: "updateChar"; slot: number; patch: Partial<CharConfig> }
-  | { type: "addAction"; char: string; action: string; count: number; seconds?: number }
-  | { type: "updateAction"; id: string; patch: Partial<RotationAction> }
-  | { type: "removeAction"; id: string }
-  | { type: "setRotation"; rotation: RotationAction[] }
+  | { type: "addNode"; containerId: string; node: RNode }
+  | { type: "updateNode"; id: string; patch: Partial<RNode> }
+  | { type: "removeNode"; id: string }
+  | { type: "duplicateNode"; id: string }
+  | { type: "moveNode"; id: string; containerId: string; index: number }
+  | { type: "addBranch"; ifId: string; branch: "elif" | "else" }
+  | { type: "removeBranch"; ifId: string; branchId: string }
+  | { type: "setBranchCond"; ifId: string; branchId: string; cond: string }
   | { type: "updateSettings"; patch: Partial<Settings> }
   | { type: "reset" };
 
@@ -82,9 +78,6 @@ export function newCharConfig(info: CharInfo): CharConfig {
   };
 }
 
-let nextId = Date.now();
-const uid = () => (nextId++).toString(36);
-
 function reducer(state: State, a: Action): State {
   switch (a.type) {
     case "setChar": {
@@ -93,7 +86,7 @@ function reducer(state: State, a: Action): State {
       const info = a.key ? charByKey.get(a.key) : undefined;
       team[a.slot] = info ? newCharConfig(info) : null;
       // Drop rotation entries of the character that left the team.
-      const rotation = old ? state.rotation.filter((r) => r.char !== old.key) : state.rotation;
+      const rotation = old ? removeChar(state.rotation, old.key) : state.rotation;
       return { ...state, team, rotation };
     }
     case "updateChar": {
@@ -101,17 +94,45 @@ function reducer(state: State, a: Action): State {
       team[a.slot] = { ...team[a.slot]!, ...a.patch };
       return { ...state, team };
     }
-    case "addAction":
+    case "addNode": {
+      // New nodes go to the end of their container.
+      const end = findContainer(state.rotation, a.containerId)?.length ?? 0;
+      return { ...state, rotation: insertNode(state.rotation, a.containerId, end, a.node) };
+    }
+    case "updateNode":
+      return { ...state, rotation: updateNode(state.rotation, a.id, a.patch) };
+    case "removeNode":
+      return { ...state, rotation: removeNode(state.rotation, a.id) };
+    case "duplicateNode":
+      return { ...state, rotation: duplicateNode(state.rotation, a.id) };
+    case "moveNode":
+      return { ...state, rotation: moveNode(state.rotation, a.id, a.containerId, a.index) };
+    case "addBranch":
       return {
         ...state,
-        rotation: [...state.rotation, { id: uid(), char: a.char, action: a.action, count: a.count, seconds: a.seconds }],
+        rotation: mapIf(state.rotation, a.ifId, (n) =>
+          a.branch === "else"
+            ? { ...n, elseBranch: n.elseBranch ?? { id: uid(), cond: "", children: [] } }
+            : { ...n, branches: [...n.branches, { id: uid(), cond: "", children: [] }] },
+        ),
       };
-    case "updateAction":
-      return { ...state, rotation: state.rotation.map((r) => (r.id === a.id ? { ...r, ...a.patch } : r)) };
-    case "removeAction":
-      return { ...state, rotation: state.rotation.filter((r) => r.id !== a.id) };
-    case "setRotation":
-      return { ...state, rotation: a.rotation };
+    case "removeBranch":
+      return {
+        ...state,
+        rotation: mapIf(state.rotation, a.ifId, (n): IfNode =>
+          n.elseBranch?.id === a.branchId
+            ? { ...n, elseBranch: undefined }
+            : { ...n, branches: n.branches.filter((b) => b.id !== a.branchId) },
+        ),
+      };
+    case "setBranchCond":
+      return {
+        ...state,
+        rotation: mapIf(state.rotation, a.ifId, (n) => ({
+          ...n,
+          branches: n.branches.map((b) => (b.id === a.branchId ? { ...b, cond: a.cond } : b)),
+        })),
+      };
     case "updateSettings":
       return { ...state, settings: { ...state.settings, ...a.patch } };
     case "reset":
@@ -130,7 +151,7 @@ function load(): State {
       saved.team = saved.team?.map((c: (CharConfig & { main?: Record<string, string>; subs?: Record<string, number> }) | null) =>
         c && !c.stats && c.main ? { ...c, stats: totalStats(Object.values(c.main), c.subs ?? {}) } : c,
       );
-      return { ...initial, ...saved };
+      return { ...initial, ...saved, rotation: migrateRotation(saved.rotation) };
     }
   } catch {}
   return initial;
