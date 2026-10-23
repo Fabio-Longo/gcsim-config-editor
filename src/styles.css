@@ -101,11 +101,14 @@ main > section > h2, .section-head { margin-bottom: 10px; }
   --track: calc(var(--card-h) + var(--pad-top) + var(--pad-bottom));
   --gap: 10px;
   --block-pad: 8px;
+  /* Height of an if's bottom strip with the "+ else if / + else" buttons. */
+  --peek-h: 28px;
 }
 .rotation-panel { overflow-x: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; }
 /* Rails: a line under every track, across the whole scroll width. */
+/* Bottom padding: room for an if's strip peeking below the last track. */
 .tracks {
-  position: relative; width: max-content; min-width: 100%;
+  position: relative; width: max-content; min-width: 100%; padding-bottom: calc(var(--peek-h) + 4px);
   background-image: repeating-linear-gradient(
     to bottom, transparent 0, transparent calc(var(--track) - 1px), var(--border) calc(var(--track) - 1px), var(--border) var(--track)
   );
@@ -141,6 +144,25 @@ main > section > h2, .section-head { margin-bottom: 10px; }
 .branch:first-child:last-child::before { border-radius: 8px; }
 .branch + .branch::before { border-top: 1px dashed color-mix(in srgb, var(--tone) 45%, transparent); }
 .branch > .lane { position: relative; padding: 0 var(--block-pad); }
+/* A header shifted past another block's header: cut that header's area out of this block's
+   background and draw the border around the cut, so the border seems to make way for it. */
+.branch.notched::before {
+  clip-path: polygon(var(--notch-w) 0, 100% 0, 100% 100%, 0 100%, 0 var(--notch-h), var(--notch-w) var(--notch-h));
+}
+.branch.notched::after {
+  content: ""; position: absolute; left: 0; top: var(--inset); width: var(--notch-w); height: var(--notch-h); pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--tone) 45%, transparent); border-top: none; border-left: none; border-bottom-right-radius: 6px;
+}
+.branch.notched:not(:first-child)::after { top: 0; }
+/* An if's last row continues into a strip that peeks into the next rail; it takes no height,
+   so the cards below stay on their rails. */
+.branch-peek { position: relative; z-index: 2; height: 0; }
+.peek-row {
+  --tone: #e2605a;
+  height: var(--peek-h); display: flex; align-items: center; gap: 6px; padding: 0 var(--block-pad); white-space: nowrap;
+  background: color-mix(in srgb, var(--tone) 10%, transparent); border: 1px solid color-mix(in srgb, var(--tone) 45%, transparent);
+  border-top: 1px dashed color-mix(in srgb, var(--tone) 45%, transparent); border-radius: 0 0 8px 8px;
+}
 /* The header takes no height; it sits in the top margin, above the cards. */
 .block-head { position: relative; z-index: 2; height: 0; display: flex; padding-left: var(--block-pad); }
 .head-row { display: flex; align-items: center; gap: 6px; height: 20px; margin-top: calc(var(--inset) + 5px); font-size: 12px; white-space: nowrap; }

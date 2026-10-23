@@ -41,13 +41,20 @@ const stop = (e: PointerEvent | KeyboardEvent) => e.stopPropagation();
 
 /**
  * A block placed first inside another block starts almost at the parent's left edge, so its
- * header would be drawn over the parent's header. Only in that case, move it just past the
- * header in the way. Rows are visited in DOM order, so parents are placed before children.
+ * header would be drawn over the parent's header (or over an if's bottom strip peeking down
+ * from the track above). Only in that case, move the header just past what is in the way,
+ * and notch that block's background around the obstacle so the obstacle keeps its own
+ * block's color underneath. Rows are visited in DOM order, so obstacles are placed first.
  * Positions come from offsetLeft/offsetTop, which ignore the enter animation's scale.
  */
 function layoutHeaders(root: HTMLElement) {
-  const rows = [...root.querySelectorAll<HTMLElement>(".block-head")];
+  const rows = [...root.querySelectorAll<HTMLElement>(".block-head, .branch-peek")];
   rows.forEach((r) => (r.style.paddingLeft = ""));
+  root.querySelectorAll<HTMLElement>(".branch.notched").forEach((b) => {
+    b.classList.remove("notched");
+    b.style.removeProperty("--notch-w");
+    b.style.removeProperty("--notch-h");
+  });
   const posOf = (el: HTMLElement) => {
     let x = 0, y = 0;
     for (let e: HTMLElement | null = el; e && e !== root; e = e.offsetParent as HTMLElement | null) {
@@ -56,28 +63,52 @@ function layoutHeaders(root: HTMLElement) {
     }
     return { x, y };
   };
-  const boxOf = (row: HTMLElement) => {
-    const items = [...row.children] as HTMLElement[];
-    const first = posOf(items[0]);
-    const last = items[items.length - 1];
-    return { left: first.x, top: first.y, right: posOf(last).x + last.offsetWidth, bottom: first.y + items[0].offsetHeight };
+  type Box = { left: number; top: number; right: number; bottom: number };
+  const boxOf = (el: HTMLElement): Box => {
+    const { x, y } = posOf(el);
+    return { left: x, top: y, right: x + el.offsetWidth, bottom: y + el.offsetHeight };
   };
-  const placed: ReturnType<typeof boxOf>[] = [];
+  const hit = (a: Box, b: Box) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+
+  const placed: Box[] = [];
   for (const row of rows) {
-    if (!row.children.length) continue;
-    let box = boxOf(row);
+    const content = row.firstElementChild as HTMLElement | null;
+    if (!content) continue;
+    let box = boxOf(content);
+    // Bottom strips never move; they are only obstacles for headers further down.
+    if (row.classList.contains("branch-peek")) {
+      placed.push(box);
+      continue;
+    }
+    const obstacles: Box[] = [];
     for (let moved = true; moved; ) {
       moved = false;
       for (const p of placed) {
-        if (box.left < p.right && box.right > p.left && box.top < p.bottom && box.bottom > p.top) {
-          // The header starts at the row's left padding: move it just past the header in the way.
+        if (hit(box, p)) {
+          // The header starts at the row's left padding: move it just past the obstacle.
           row.style.paddingLeft = `${p.right + 6 - posOf(row).x}px`;
-          box = boxOf(row);
+          box = boxOf(content);
+          obstacles.push(p);
           moved = true;
         }
       }
     }
+    if (obstacles.length) notch(row.parentElement as HTMLElement, obstacles);
     placed.push(box);
+  }
+
+  /** Cuts the obstacles' area out of the top-left corner of the branch's background. */
+  function notch(branch: HTMLElement, obstacles: Box[]) {
+    const b = posOf(branch);
+    // The background starts --inset below the branch top, but only on a block's first row.
+    const first = branch.parentElement?.firstElementChild === branch;
+    const bgTop = b.y + (first ? parseFloat(getComputedStyle(branch).getPropertyValue("--inset")) || 0 : 0);
+    const w = Math.max(...obstacles.map((o) => o.right)) + 3 - b.x;
+    const h = Math.max(...obstacles.map((o) => o.bottom)) + 3 - bgTop;
+    if (w <= 0 || h <= 0) return;
+    branch.classList.add("notched");
+    branch.style.setProperty("--notch-w", `${w}px`);
+    branch.style.setProperty("--notch-h", `${h}px`);
   }
 }
 
@@ -352,10 +383,10 @@ function BlockRow({
 }
 
 /** Block wrapper: its background inset from the track edge grows with nesting depth. */
-function BlockBox({ children }: { children: ReactNode }) {
+function BlockBox({ children, kind }: { children: ReactNode; kind: BlockKind }) {
   const depth = useContext(DepthCtx);
   return (
-    <div className="block" style={{ ["--inset" as string]: `${2 + 4 * Math.min(depth, 3)}px` }}>
+    <div className={`block block-${kind}`} style={{ ["--inset" as string]: `${2 + 4 * Math.min(depth, 3)}px` }}>
       {children}
     </div>
   );
@@ -366,7 +397,7 @@ function BlockView({ node, handle }: { node: Exclude<RNode, ActionNode>; handle:
   const { dispatch } = useContext(RotationCtx);
   if (node.kind === "group")
     return (
-      <BlockBox>
+      <BlockBox kind="group">
         <BlockRow
           tone="group"
           cid={node.id}
@@ -384,7 +415,7 @@ function BlockView({ node, handle }: { node: Exclude<RNode, ActionNode>; handle:
     );
   if (node.kind === "while")
     return (
-      <BlockBox>
+      <BlockBox kind="while">
         <BlockRow
           tone="while"
           cid={node.id}
@@ -422,7 +453,7 @@ function IfView({ node, handle }: { node: IfNode; handle: Handle }) {
     </button>
   );
   return (
-    <BlockBox>
+    <BlockBox kind="if">
       {node.branches.map((b, i) => (
         <BlockRow
           key={b.id}
@@ -440,18 +471,6 @@ function IfView({ node, handle }: { node: IfNode; handle: Handle }) {
                 <Keyword word="else if" />
               )}
               <CondInput value={b.cond} onChange={(cond) => dispatch({ type: "setBranchCond", ifId: node.id, branchId: b.id, cond })} />
-              {i === 0 && (
-                <>
-                  <button className="head-btn" onPointerDown={stop} onClick={() => dispatch({ type: "addBranch", ifId: node.id, branch: "elif" })}>
-                    + <Keyword word="else if" />
-                  </button>
-                  {!node.elseBranch && (
-                    <button className="head-btn" onPointerDown={stop} onClick={() => dispatch({ type: "addBranch", ifId: node.id, branch: "else" })}>
-                      + <Keyword word="else" />
-                    </button>
-                  )}
-                </>
-              )}
               {i === 0 ? <NodeButtons id={node.id} /> : removeBranch(b)}
             </>
           }
@@ -471,6 +490,19 @@ function IfView({ node, handle }: { node: IfNode; handle: Handle }) {
           }
         />
       )}
+      {/* Takes no height: the strip peeks into the next rail, under the last branch. */}
+      <div className="branch-peek">
+        <div className="peek-row">
+          <button className="head-btn" onPointerDown={stop} onClick={() => dispatch({ type: "addBranch", ifId: node.id, branch: "elif" })}>
+            + <Keyword word="else if" />
+          </button>
+          {!node.elseBranch && (
+            <button className="head-btn" onPointerDown={stop} onClick={() => dispatch({ type: "addBranch", ifId: node.id, branch: "else" })}>
+              + <Keyword word="else" />
+            </button>
+          )}
+        </div>
+      </div>
     </BlockBox>
   );
 }
