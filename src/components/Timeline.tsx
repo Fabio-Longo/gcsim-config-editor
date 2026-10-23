@@ -1,5 +1,5 @@
 import {
-  createContext, useContext, useRef, useState, type Dispatch, type HTMLAttributes, type KeyboardEvent, type PointerEvent,
+  createContext, useContext, useLayoutEffect, useRef, useState, type Dispatch, type HTMLAttributes, type KeyboardEvent, type PointerEvent,
   type ReactNode,
 } from "react";
 import {
@@ -39,6 +39,48 @@ const laneId = (cid: string) => `c:${cid}`;
 const clampSeconds = (v: number) => Math.max(0.1, Math.min(60, Math.round((Number.isFinite(v) ? v : 1) * 10) / 10));
 const stop = (e: PointerEvent | KeyboardEvent) => e.stopPropagation();
 
+/**
+ * Nested blocks share their top (and bottom) edge, so a block placed first inside another
+ * would draw its pill right over the parent's. Shift such pills to the right of the ones
+ * already placed. Rows are visited in DOM order, so parents are placed before children.
+ * Positions come from offsetLeft/offsetTop, which ignore the enter animation's scale.
+ */
+function layoutPills(root: HTMLElement) {
+  const rows = [...root.querySelectorAll<HTMLElement>(".block-head, .block-foot")];
+  rows.forEach((r) => (r.style.paddingLeft = ""));
+  const posOf = (el: HTMLElement) => {
+    let x = 0, y = 0;
+    for (let e: HTMLElement | null = el; e && e !== root; e = e.offsetParent as HTMLElement | null) {
+      x += e.offsetLeft;
+      y += e.offsetTop;
+    }
+    return { x, y };
+  };
+  const boxOf = (row: HTMLElement) => {
+    const pills = [...row.children] as HTMLElement[];
+    const first = posOf(pills[0]);
+    const last = pills[pills.length - 1];
+    return { left: first.x, top: first.y, right: posOf(last).x + last.offsetWidth, bottom: first.y + pills[0].offsetHeight };
+  };
+  const placed: ReturnType<typeof boxOf>[] = [];
+  for (const row of rows) {
+    if (!row.children.length) continue;
+    let box = boxOf(row);
+    for (let moved = true; moved; ) {
+      moved = false;
+      for (const p of placed) {
+        if (box.left < p.right && box.right > p.left && box.top < p.bottom && box.bottom > p.top) {
+          // Pills start at the row's left padding: move them to just past the pill in the way.
+          row.style.paddingLeft = `${p.right + 6 - posOf(row).x}px`;
+          box = boxOf(row);
+          moved = true;
+        }
+      }
+    }
+    placed.push(box);
+  }
+}
+
 /** Plays the leave animation on `el`, then runs `done` (the actual removal). */
 function animateOut(el: Element | null, done: () => void) {
   if (!el) return done();
@@ -47,7 +89,13 @@ function animateOut(el: Element | null, done: () => void) {
 }
 
 export function Timeline({ team, rotation, dispatch }: Props) {
+  const { lang } = useI18n();
   const [addTo, setAddTo] = useState<string | null>(null);
+  const tracksRef = useRef<HTMLDivElement>(null);
+  // Pill widths depend on conditions and on the UI language.
+  useLayoutEffect(() => {
+    if (tracksRef.current) layoutPills(tracksRef.current);
+  }, [rotation, lang]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [drop, setDrop] = useState<DropTarget | null>(null);
   // Droppables inside the dragged node: a block can't be dropped into itself.
@@ -123,7 +171,7 @@ export function Timeline({ team, rotation, dispatch }: Props) {
       >
         <div className="rotation-panel">
           {/* "tracks" draws the rails: one line per track, across the full scroll width. */}
-          <div className="tracks">
+          <div className="tracks" ref={tracksRef}>
             <Lane cid={ROOT} nodes={rotation} />
           </div>
         </div>
@@ -248,14 +296,19 @@ function ActionCard({ item, handle }: { item: ActionNode; handle?: Handle }) {
   );
 }
 
+/** Condition field that grows with its text, so the whole condition is always visible. */
 function CondInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const { t } = useI18n();
+  const placeholder = t("condPlaceholder");
+  // Full example in the tooltip; the field itself starts small.
   return (
     <input
       className="cond"
       value={value}
-      placeholder={t("condPlaceholder")}
-      title={value}
+      placeholder={placeholder}
+      title={value || t("condExample")}
+      // Monospace font: one "ch" per character.
+      style={{ width: `${(value || placeholder).length + 1}ch` }}
       spellCheck={false}
       onPointerDown={stop}
       onKeyDown={stop}
@@ -276,13 +329,17 @@ function Keyword({ word }: { word: "if" | "else if" | "else" | "while" }) {
 }
 
 /**
- * One row of a block, like a track header + track in a video editor: the header cell sits to
- * the left, so conditions never push the cards down out of line with cards outside the block.
+ * One row of a block. Its tinted background covers exactly the cards' height; the header
+ * pill sits on the top edge and takes no height, so cards inside stay level with cards outside.
  */
-function BlockRow({ head, cid, nodes, branchId }: { head: ReactNode; cid: string; nodes: RNode[]; branchId?: string }) {
+function BlockRow({
+  head, cid, nodes, branchId, tone,
+}: { head: ReactNode; cid: string; nodes: RNode[]; branchId?: string; tone: "group" | "while" | "if" | "else" }) {
   return (
-    <div className="branch" data-branch={branchId}>
-      <div className="block-head">{head}</div>
+    <div className={`branch tone-${tone}`} data-branch={branchId}>
+      <div className="block-head">
+        <div className="pill">{head}</div>
+      </div>
       <Lane cid={cid} nodes={nodes} />
     </div>
   );
@@ -293,36 +350,36 @@ function BlockView({ node, handle }: { node: Exclude<RNode, ActionNode>; handle:
   const { dispatch } = useContext(RotationCtx);
   if (node.kind === "group")
     return (
-      <div className="block group">
+      <div className="block">
         <BlockRow
+          tone="group"
           cid={node.id}
           nodes={node.children}
           head={
-            <div className="head-top">
+            <>
               <span className="grip" {...handle}>
                 ⠿ {t("block.group")}
               </span>
               <NodeButtons id={node.id} />
-            </div>
+            </>
           }
         />
       </div>
     );
   if (node.kind === "while")
     return (
-      <div className="block while">
+      <div className="block">
         <BlockRow
+          tone="while"
           cid={node.id}
           nodes={node.children}
           head={
             <>
-              <div className="head-top">
-                <span className="grip" {...handle}>
-                  ⠿ <Keyword word="while" />
-                </span>
-                <NodeButtons id={node.id} />
-              </div>
+              <span className="grip" {...handle}>
+                ⠿ <Keyword word="while" />
+              </span>
               <CondInput value={node.cond} onChange={(cond) => dispatch({ type: "updateNode", id: node.id, patch: { cond } })} />
+              <NodeButtons id={node.id} />
             </>
           }
         />
@@ -348,67 +405,55 @@ function IfView({ node, handle }: { node: IfNode; handle: Handle }) {
       ×
     </button>
   );
-  const lastId = (node.elseBranch ?? node.branches[node.branches.length - 1]).id;
-  // "+ else if / + else" live in the header of the bottom row, so they add no height of their own.
-  const addButtons = (b: Branch) =>
-    b.id === lastId && (
-      <div className="head-add">
-        <button onPointerDown={stop} onClick={() => dispatch({ type: "addBranch", ifId: node.id, branch: "elif" })}>
-          + <Keyword word="else if" />
-        </button>
-        {!node.elseBranch && (
-          <button onPointerDown={stop} onClick={() => dispatch({ type: "addBranch", ifId: node.id, branch: "else" })}>
-            + <Keyword word="else" />
-          </button>
-        )}
-      </div>
-    );
   return (
-    <div className="block if">
+    <div className="block">
       {node.branches.map((b, i) => (
         <BlockRow
           key={b.id}
+          tone={i === 0 ? "if" : "else"}
           branchId={b.id}
           cid={b.id}
           nodes={b.children}
           head={
             <>
-              <div className="head-top">
-                {i === 0 ? (
-                  <span className="grip" {...handle}>
-                    ⠿ <Keyword word="if" />
-                  </span>
-                ) : (
-                  <span className="branch-label">
-                    <Keyword word="else if" />
-                  </span>
-                )}
-                {i === 0 ? <NodeButtons id={node.id} /> : removeBranch(b)}
-              </div>
+              {i === 0 ? (
+                <span className="grip" {...handle}>
+                  ⠿ <Keyword word="if" />
+                </span>
+              ) : (
+                <Keyword word="else if" />
+              )}
               <CondInput value={b.cond} onChange={(cond) => dispatch({ type: "setBranchCond", ifId: node.id, branchId: b.id, cond })} />
-              {addButtons(b)}
+              {i === 0 ? <NodeButtons id={node.id} /> : removeBranch(b)}
             </>
           }
         />
       ))}
       {node.elseBranch && (
         <BlockRow
+          tone="else"
           branchId={node.elseBranch.id}
           cid={node.elseBranch.id}
           nodes={node.elseBranch.children}
           head={
             <>
-              <div className="head-top">
-                <span className="branch-label">
-                  <Keyword word="else" />
-                </span>
-                {removeBranch(node.elseBranch)}
-              </div>
-              {addButtons(node.elseBranch)}
+              <Keyword word="else" />
+              {removeBranch(node.elseBranch)}
             </>
           }
         />
       )}
+      {/* Sits on the bottom edge of the last row and, like the header, takes no height. */}
+      <div className="block-foot">
+        <button className="pill" onPointerDown={stop} onClick={() => dispatch({ type: "addBranch", ifId: node.id, branch: "elif" })}>
+          + <Keyword word="else if" />
+        </button>
+        {!node.elseBranch && (
+          <button className="pill" onPointerDown={stop} onClick={() => dispatch({ type: "addBranch", ifId: node.id, branch: "else" })}>
+            + <Keyword word="else" />
+          </button>
+        )}
+      </div>
     </div>
   );
 }

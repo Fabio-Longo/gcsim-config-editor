@@ -59,7 +59,8 @@ const dict = {
   duplicate: { en: "Duplicate", ru: "Дублировать" },
   orBlock: { en: "…or a block", ru: "…или блок" },
   "block.group": { en: "Action block", ru: "Блок действий" },
-  condPlaceholder: { en: "condition, e.g. .xiangling.burst.ready", ru: "условие, напр. .xiangling.burst.ready" },
+  condPlaceholder: { en: "condition", ru: "условие" },
+  condExample: { en: "Condition, e.g. .xiangling.burst.ready", ru: "Условие, напр. .xiangling.burst.ready" },
   skipOnCooldown: { en: "Skip if on cooldown", ru: "Пропустить, если на перезарядке" },
   notesFromGcsim: { en: "gcsim notes:", ru: "Примечания gcsim:" },
 

@@ -91,19 +91,24 @@ main > section > h2, .section-head { margin-bottom: 10px; }
 
 /* Rotation, laid out like tracks in a video editor. Everything is sized in whole tracks:
    a card (or "+") plus its vertical margins is exactly one track, and a block row is as tall
-   as its tallest content, so cards inside blocks stay on the same rails as cards outside. */
+   as its tallest content, so cards inside blocks stay on the same rails as cards outside.
+   Block backgrounds cover exactly the cards' height; only the header/footer pills stick out
+   into the rail gap between tracks. */
 :root {
-  --card-w: 104px;
+  --card-w: 98px;
   --card-h: 150px;
-  --track-pad: 8px;
+  --track-pad: 20px;
   --track: calc(var(--card-h) + 2 * var(--track-pad));
   --gap: 10px;
-  --head-w: 170px;
+  --block-pad: 8px;
+  --pill-h: 22px;
+  /* How far a pill reaches into its block; the rest sits in the rail gap, clear of the cards. */
+  --pill-overlap: 4px;
 }
 .rotation-panel { overflow-x: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; }
 /* Rails: a line under every track, across the whole scroll width. */
 .tracks {
-  width: max-content; min-width: 100%;
+  position: relative; width: max-content; min-width: 100%;
   background-image: repeating-linear-gradient(
     to bottom, transparent 0, transparent calc(var(--track) - 1px), var(--border) calc(var(--track) - 1px), var(--border) var(--track)
   );
@@ -120,24 +125,31 @@ main > section > h2, .section-head { margin-bottom: 10px; }
 .node.drop-before::before { left: calc(var(--gap) / -2 - 2px); }
 .node.drop-after::after { right: calc(var(--gap) / -2 - 2px); }
 
-/* Blocks: no borders or vertical padding, just a light tint. Nested tints stack. */
-.block { display: flex; flex-direction: column; border-radius: 8px; }
-.block.group { background: #4f7fa81f; }
-.block.while { background: #8a6bbf1f; }
-.block.if { background: #b8823e1a; }
-.branch { display: flex; align-items: stretch; animation: enter 0.16s ease-out; }
-.block-head {
-  flex: none; width: var(--head-w); display: flex; flex-direction: column; gap: 6px; padding: var(--track-pad);
-  font-size: 12px; background: #ffffff08;
+/* Blocks */
+.block { display: flex; flex-direction: column; }
+.branch { position: relative; display: flex; flex-direction: column; animation: enter 0.16s ease-out; }
+.tone-group { --tone: #4f7fa8; }
+.tone-while { --tone: #8a6bbf; }
+.tone-if { --tone: #6cc070; }
+.tone-else { --tone: #e2605a; }
+/* Tinted background + hairline border, inset to the cards' top and bottom edges. */
+.branch::before {
+  content: ""; position: absolute; left: 0; right: 0; top: var(--track-pad); bottom: var(--track-pad);
+  background: color-mix(in srgb, var(--tone) 10%, transparent); border: 1px solid color-mix(in srgb, var(--tone) 45%, transparent);
+  border-radius: 8px; pointer-events: none;
 }
-.branch:first-child > .block-head { border-top-left-radius: 8px; }
-.branch:last-child > .block-head { border-bottom-left-radius: 8px; }
-.head-top { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
-.head-add { display: flex; gap: 4px; }
-.head-add button { font-size: 11px; padding: 2px 6px; }
+.branch > .lane { position: relative; padding: 0 var(--block-pad); }
+/* Header and footer take no height; their pills sit on the block's top/bottom edge. */
+.block-head, .block-foot { position: relative; z-index: 2; height: 0; display: flex; gap: 6px; padding-left: 12px; }
+.pill {
+  flex: none; height: var(--pill-h); display: inline-flex; align-items: center; gap: 5px; padding: 0 6px;
+  background: var(--panel-2); border: 1px solid color-mix(in srgb, var(--tone, #888) 55%, transparent); border-radius: 6px;
+  font-size: 12px; white-space: nowrap;
+}
+.block-head .pill { margin-top: calc(var(--track-pad) - var(--pill-h) + var(--pill-overlap)); }
+.block-foot .pill { --tone: #e2605a; margin-top: calc(-1 * var(--track-pad) - var(--pill-overlap)); font-size: 11px; }
 .grip { display: flex; align-items: center; gap: 4px; font-weight: 600; cursor: grab; user-select: none; touch-action: none; white-space: nowrap; }
-.branch-label { font-weight: 600; }
-.cond { width: 100%; font-family: ui-monospace, Consolas, monospace; font-size: 12px; padding: 3px 6px; }
+.cond { box-sizing: content-box; height: 18px; padding: 0 4px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; min-width: 4ch; }
 .kw { font-family: ui-monospace, Consolas, monospace; font-weight: 700; }
 .kw-if { color: #6cc070; }
 .kw-else { color: #e2605a; }
@@ -162,7 +174,7 @@ main > section > h2, .section-head { margin-bottom: 10px; }
 .counter { display: flex; align-items: center; gap: 4px; font-size: 12px; }
 .counter button { padding: 0 6px; line-height: 18px; }
 .add-action {
-  flex: none; width: 44px; height: var(--card-h); margin: var(--track-pad) 0; font-size: 24px; color: var(--muted);
+  flex: none; width: 40px; height: var(--card-h); margin: var(--track-pad) 0; font-size: 24px; color: var(--muted);
   background: transparent; border: 2px dashed var(--border);
 }
 
