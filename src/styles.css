@@ -160,10 +160,13 @@ main > section > h2, .section-head { margin-bottom: 10px; }
 .branch.notched:not(:first-child)::after { top: 0; }
 /* An if's last row continues into a strip that peeks into the next rail; it takes no height,
    so the cards below stay on their rails. */
-.branch-peek { position: relative; z-index: 2; height: 0; }
+/* Deeper strips stack above shallower ones. inline-size containment: a shifted strip may
+   overflow to the right but never widens its block. */
+.branch-peek { position: relative; z-index: calc(3 + var(--depth, 0)); height: 0; contain: inline-size; }
 .peek-row {
   --tone: #e2605a;
   height: var(--peek-h); display: flex; align-items: center; gap: 6px; padding: 0 var(--block-pad); white-space: nowrap;
+  min-width: max-content;
   background: color-mix(in srgb, var(--tone) var(--tint), transparent); border: 1px solid color-mix(in srgb, var(--tone) var(--edge), transparent);
   border-top: 1px dashed color-mix(in srgb, var(--tone) var(--edge), transparent); border-radius: 0 0 8px 8px;
 }

@@ -76,16 +76,22 @@ function layoutHeaders(root: HTMLElement) {
   const hit = (a: Box, b: Box) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
 
   const placed: Box[] = [];
+  /** A strip's background spans its whole block; only the part up to its last button counts. */
+  const stripBoxOf = (strip: HTMLElement): Box => {
+    const box = boxOf(strip);
+    const last = strip.lastElementChild as HTMLElement | null;
+    return last ? { ...box, right: posOf(last).x + last.offsetWidth + 6 } : box;
+  };
   /** Moves `content` right (via `shift`) until it clears everything placed; returns what it hit. */
-  const place = (content: HTMLElement, shift: (x: number) => void) => {
-    let box = boxOf(content);
+  const place = (content: HTMLElement, shift: (x: number) => void, measure = boxOf) => {
+    let box = measure(content);
     const obstacles: Box[] = [];
     for (let moved = true; moved; ) {
       moved = false;
       for (const p of placed) {
         if (hit(box, p)) {
           shift(p.right);
-          box = boxOf(content);
+          box = measure(content);
           obstacles.push(p);
           moved = true;
         }
@@ -105,7 +111,7 @@ function layoutHeaders(root: HTMLElement) {
   for (const row of strips) {
     const content = row.firstElementChild as HTMLElement | null;
     // The strip is its own background, so it simply starts later; nothing to notch.
-    if (content) place(content, (right) => (content.style.marginLeft = `${right + 4 - posOf(row).x}px`));
+    if (content) place(content, (right) => (content.style.marginLeft = `${right + 4 - posOf(row).x}px`), stripBoxOf);
   }
 
   /** Cuts the obstacles' area out of the top-left corner of the branch's background. */
@@ -422,6 +428,8 @@ function BlockBox({ children, kind }: { children: ReactNode; kind: BlockKind }) 
       className={`block block-${kind}`}
       style={{
         ["--inset" as string]: `${2 + 4 * Math.min(depth, 3)}px`,
+        // Nested if strips may sit on top of their parent's strip; keep them clickable.
+        ["--depth" as string]: depth,
         // Deeper blocks get a stronger tint and border, so nesting reads at a glance.
         ["--tint" as string]: `${10 + 6 * Math.min(depth, 4)}%`,
         ["--edge" as string]: `${40 + 12 * Math.min(depth, 4)}%`,
