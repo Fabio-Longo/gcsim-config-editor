@@ -121,30 +121,16 @@ function layoutHeaders(root: HTMLElement) {
 }
 
 /**
- * Rails: a line under every row. Each top-level item draws lines at the bottoms of its rows
- * (one track for a card or "+"), spanning its width plus half the gap on both sides, so the
- * lines of neighbours at the same height join up. A row that grew (room for nested "+ else"
- * strips) takes its rail down with it. The first and last items stretch to the panel edges.
+ * Rails: lines across the whole timeline at the bottom of every row, from the panel's start to
+ * its end. A card or "+" ends one track down; a block contributes the bottoms of all its rows,
+ * so a row that grew (room for nested "+ else" strips) takes its rail down with it.
  */
 function drawRails(root: HTMLElement, rails: HTMLElement, posOf: (el: HTMLElement) => { x: number; y: number }) {
-  const lane = root.querySelector<HTMLElement>(":scope > .lane");
-  if (!lane) return;
   const css = getComputedStyle(root);
   const track = ["--card-h", "--pad-top", "--pad-bottom"].reduce((sum, v) => sum + parseFloat(css.getPropertyValue(v)), 0);
-  const gap = parseFloat(getComputedStyle(lane).columnGap) || 0;
-  const items = [...lane.children] as HTMLElement[];
-  const lines: string[] = [];
-  items.forEach((el, i) => {
-    const { x } = posOf(el);
-    const left = i === 0 ? 0 : x - gap / 2;
-    const right = i === items.length - 1 ? root.offsetWidth : x + el.offsetWidth + gap / 2;
-    const ys = new Set<number>();
-    const rows = el.querySelectorAll<HTMLElement>(".branch");
-    if (rows.length) rows.forEach((r) => ys.add(Math.round(posOf(r).y + r.offsetHeight)));
-    else ys.add(track);
-    for (const y of ys) lines.push(`<i style="left:${left}px;width:${right - left}px;top:${y - 1}px"></i>`);
-  });
-  rails.innerHTML = lines.join("");
+  const ys = new Set<number>([Math.round(track)]);
+  root.querySelectorAll<HTMLElement>(".branch").forEach((r) => ys.add(Math.round(posOf(r).y + r.offsetHeight)));
+  rails.innerHTML = [...ys].map((y) => `<i style="top:${y - 1}px"></i>`).join("");
 }
 
 /** Plays the leave animation on `el`, then runs `done` (the actual removal). */
@@ -158,14 +144,7 @@ export function Timeline({ team, rotation, dispatch }: Props) {
   const { lang } = useI18n();
   const [addTo, setAddTo] = useState<string | null>(null);
   const tracksRef = useRef<HTMLDivElement>(null);
-  // Header widths depend on conditions and on the UI language; rails also on the panel width.
-  useEffect(() => {
-    const el = tracksRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => layoutHeaders(el));
-    ro.observe(el.parentElement!);
-    return () => ro.disconnect();
-  }, []);
+  // Header widths depend on conditions and on the UI language.
   useLayoutEffect(() => {
     if (tracksRef.current) layoutHeaders(tracksRef.current);
   }, [rotation, lang]);
