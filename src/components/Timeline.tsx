@@ -146,10 +146,35 @@ export function Timeline({ team, rotation, dispatch }: Props) {
   const { lang } = useI18n();
   const [addTo, setAddTo] = useState<string | null>(null);
   const tracksRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  // Where the user scrolled the panel, and until when edits may not move it.
+  const scrollMemo = useRef({ left: 0, guardUntil: 0 });
+  // Read during render, i.e. before React applies this edit to the DOM, so it is the position
+  // the user was looking at (scroll events alone can lag behind or not fire at all).
+  if (panelRef.current && performance.now() > scrollMemo.current.guardUntil) {
+    scrollMemo.current.left = panelRef.current.scrollLeft;
+  }
   // Header widths depend on conditions and on the UI language.
   useLayoutEffect(() => {
     if (tracksRef.current) layoutHeaders(tracksRef.current);
   }, [rotation, lang]);
+  // Adding or removing something at the end of a long row must not throw the panel back to
+  // its start: keep the user's scroll position across every edit (clamped if the row got
+  // shorter), and for a moment afterwards undo any jump the browser makes on its own.
+  useLayoutEffect(() => {
+    const p = panelRef.current;
+    if (!p) return;
+    const memo = scrollMemo.current;
+    p.scrollLeft = Math.min(memo.left, p.scrollWidth - p.clientWidth);
+    memo.guardUntil = performance.now() + 400;
+  }, [rotation]);
+  const onPanelScroll = () => {
+    const p = panelRef.current!;
+    const memo = scrollMemo.current;
+    if (performance.now() > memo.guardUntil) return;
+    const keep = Math.min(memo.left, p.scrollWidth - p.clientWidth);
+    if (Math.abs(p.scrollLeft - keep) > 1) p.scrollLeft = keep;
+  };
   const [activeId, setActiveId] = useState<string | null>(null);
   const [drop, setDrop] = useState<DropTarget | null>(null);
   // Droppables inside the dragged node: a block can't be dropped into itself.
@@ -223,7 +248,7 @@ export function Timeline({ team, rotation, dispatch }: Props) {
         }}
         onDragCancel={endDrag}
       >
-        <div className="rotation-panel">
+        <div className="rotation-panel" ref={panelRef} onScroll={onPanelScroll}>
           {/* "tracks" draws the rails: one line per track, across the full scroll width. */}
           <div className="tracks" ref={tracksRef}>
             {/* Filled by drawRails after layout. */}
