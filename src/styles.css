@@ -171,9 +171,15 @@ main > section > h2, .section-head { margin-bottom: 10px; }
   border-top: 1px dashed color-mix(in srgb, var(--tone) var(--edge), transparent); border-radius: 0 0 8px 8px;
 }
 /* The header takes no height; it sits in the top margin, above the cards. */
-.block-head { position: relative; z-index: 2; height: 0; display: flex; padding-left: var(--block-pad); }
-.head-row { display: flex; align-items: center; gap: 6px; height: 20px; margin-top: min(calc(var(--inset) + 5px), calc(var(--pad-top) - 22px)); font-size: 12px; white-space: nowrap; }
-.branch:not(:first-child) > .block-head .head-row { margin-top: 6px; }
+.block-head { position: relative; z-index: 2; height: 0; display: flex; padding: 0 6px 0 var(--block-pad); }
+.head-row, .head-tools {
+  display: flex; align-items: center; height: 20px; margin-top: min(calc(var(--inset) + 5px), calc(var(--pad-top) - 22px));
+  font-size: 12px; white-space: nowrap;
+}
+.head-row { gap: 6px; }
+/* In the flow, so the block is always wide enough for both the header and its tools. */
+.head-tools { margin-left: auto; padding-left: 8px; }
+.branch:not(:first-child) > .block-head > * { margin-top: 6px; }
 .head-btn { font-size: 11px; padding: 1px 6px; }
 .grip { display: flex; align-items: center; gap: 4px; font-weight: 600; cursor: grab; user-select: none; touch-action: none; white-space: nowrap; }
 .cond { box-sizing: content-box; height: 16px; padding: 0 4px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; min-width: 4ch; }

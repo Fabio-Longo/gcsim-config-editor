@@ -95,7 +95,9 @@ function layoutHeaders(root: HTMLElement) {
   };
 
   for (const row of heads) {
-    const content = row.firstElementChild as HTMLElement | null;
+    // Only the left part (keyword + condition) can collide: the ⧉ × tools sit at the right
+    // end, and every lane ends with a "+" button, so a nested block never reaches them.
+    const content = row.querySelector<HTMLElement>(":scope > .head-row");
     const node = row.closest<HTMLElement>(".node");
     if (!content || !node) continue;
     // On a block's first row the header band covers the block's top-left corner too, so a
@@ -411,9 +413,11 @@ const DepthCtx = createContext(0);
  * block's top padding, so cards inside stay level with cards outside.
  */
 function BlockRow({
-  head, cid, nodes, branchId, tone, last = true,
+  head, tools, cid, nodes, branchId, tone, last = true,
 }: {
   head: ReactNode;
+  /** Duplicate / remove buttons, pinned to the row's top-right corner. */
+  tools?: ReactNode;
   cid: string;
   nodes: RNode[];
   branchId?: string;
@@ -427,6 +431,7 @@ function BlockRow({
     <div className={`branch tone-${tone}${containsIf(nodes) ? " has-strips" : ""}${last ? " last-row" : ""}`} data-branch={branchId}>
       <div className="block-head">
         <div className="head-row">{head}</div>
+        {tools && <div className="head-tools">{tools}</div>}
       </div>
       <DepthCtx.Provider value={depth + 1}>
         <Lane cid={cid} nodes={nodes} />
@@ -469,9 +474,9 @@ function BlockView({ node, handle }: { node: Exclude<RNode, ActionNode>; handle:
               <span className="grip" {...handle}>
                 ⠿ {t("block.group")}
               </span>
-              <NodeButtons id={node.id} />
             </>
           }
+          tools={<NodeButtons id={node.id} />}
         />
       </BlockBox>
     );
@@ -488,9 +493,9 @@ function BlockView({ node, handle }: { node: Exclude<RNode, ActionNode>; handle:
                 ⠿ <Keyword word="while" />
               </span>
               <CondInput value={node.cond} onChange={(cond) => dispatch({ type: "updateNode", id: node.id, patch: { cond } })} />
-              <NodeButtons id={node.id} />
             </>
           }
+          tools={<NodeButtons id={node.id} />}
         />
       </BlockBox>
     );
@@ -534,9 +539,9 @@ function IfView({ node, handle }: { node: IfNode; handle: Handle }) {
                 <Keyword word="else if" />
               )}
               <CondInput value={b.cond} onChange={(cond) => dispatch({ type: "setBranchCond", ifId: node.id, branchId: b.id, cond })} />
-              {i === 0 ? <NodeButtons id={node.id} /> : removeBranch(b)}
             </>
           }
+          tools={i === 0 ? <NodeButtons id={node.id} /> : removeBranch(b)}
         />
       ))}
       {node.elseBranch && (
@@ -545,12 +550,8 @@ function IfView({ node, handle }: { node: IfNode; handle: Handle }) {
           branchId={node.elseBranch.id}
           cid={node.elseBranch.id}
           nodes={node.elseBranch.children}
-          head={
-            <>
-              <Keyword word="else" />
-              {removeBranch(node.elseBranch)}
-            </>
-          }
+          head={<Keyword word="else" />}
+          tools={removeBranch(node.elseBranch)}
         />
       )}
       {/* Takes no height: the strip peeks into the next rail, under the last branch. */}
