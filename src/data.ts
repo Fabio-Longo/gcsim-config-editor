@@ -3,7 +3,7 @@ import gamedata from "./data/gamedata.json";
 export type Element = "anemo" | "cryo" | "pyro" | "hydro" | "electro" | "geo" | "dendro" | "none";
 export type WeaponType = "sword" | "claymore" | "polearm" | "bow" | "catalyst";
 
-/** English name in `name`; `names` holds it in every gcsim language (en, ru, zh, ja, ko, de, es). */
+/** English name in `name`; `names` holds it in every game language (see LANGS in locales). */
 interface Named {
   key: string;
   name: string;

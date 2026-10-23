@@ -317,7 +317,9 @@ function ActionCard({ item, handle }: { item: ActionNode; handle?: Handle }) {
       </div>
       {isWait ? <div className="wait-icon">⏳</div> : <img src={img.char(item.char)} alt="" draggable={false} />}
       <div className="card-name">{isWait ? "\u00a0" : info ? name(info) : item.char}</div>
-      <div className="card-action">{t(`action.${item.action}`)}</div>
+      <div className="card-action" title={t(`action.${item.action}`)}>
+        {t(`action.${item.action}`)}
+      </div>
       {isWait && (
         <div className="counter" onPointerDown={stop} onKeyDown={stop}>
           <SecondsInput value={item.seconds ?? 1} onChange={(seconds) => update({ seconds })} />
