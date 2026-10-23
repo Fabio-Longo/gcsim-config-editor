@@ -129,9 +129,12 @@ main > section > h2, .section-head { margin-bottom: 10px; }
 .node.drop-before::before { left: calc(var(--gap) / -2 - 2px); }
 .node.drop-after::after { right: calc(var(--gap) / -2 - 2px); }
 
-/* Blocks: a tinted background with a hairline border. --inset (set per nesting depth) is the
-   distance from the track edge, so nested blocks sit visibly inside their parent. */
-.block { display: flex; flex-direction: column; }
+/* Blocks: a tinted background with a hairline border, --inset from the track edge. The same
+   inset at every depth, and blocks stretch to their row's height, so a nested block's top and
+   bottom line up with its parent's. */
+.block { --inset: 2px; display: flex; flex-direction: column; }
+.branch .node:has(> .block) { align-self: stretch; }
+.block > .branch.last-row { flex-grow: 1; }
 .branch { position: relative; display: flex; flex-direction: column; animation: enter 0.16s ease-out; }
 .tone-group { --tone: #4f7fa8; }
 .tone-while { --tone: #8a6bbf; }

@@ -98,10 +98,18 @@ function layoutHeaders(root: HTMLElement) {
     const content = row.firstElementChild as HTMLElement | null;
     const node = row.closest<HTMLElement>(".node");
     if (!content || !node) continue;
-    place(content, (by) => {
-      node.style.marginLeft = `${(parseFloat(node.style.marginLeft) || 0) + by}px`;
-      node.dataset.shifted = "";
-    });
+    // On a block's first row the header band covers the block's top-left corner too, so a
+    // parent header (with its ⧉ ×) must clear the block's edge, not just this header.
+    const firstRow = row.parentElement === row.parentElement?.parentElement?.firstElementChild;
+    const measure = (el: HTMLElement): Box => (firstRow ? { ...boxOf(el), left: posOf(node).x } : boxOf(el));
+    place(
+      content,
+      (by) => {
+        node.style.marginLeft = `${(parseFloat(node.style.marginLeft) || 0) + by}px`;
+        node.dataset.shifted = "";
+      },
+      measure,
+    );
   }
   for (const row of strips) {
     const content = row.firstElementChild as HTMLElement | null;
@@ -385,12 +393,20 @@ const DepthCtx = createContext(0);
  * block's top padding, so cards inside stay level with cards outside.
  */
 function BlockRow({
-  head, cid, nodes, branchId, tone,
-}: { head: ReactNode; cid: string; nodes: RNode[]; branchId?: string; tone: "group" | "while" | "if" | "else" }) {
+  head, cid, nodes, branchId, tone, last = true,
+}: {
+  head: ReactNode;
+  cid: string;
+  nodes: RNode[];
+  branchId?: string;
+  tone: "group" | "while" | "if" | "else";
+  /** The block's bottom row: it absorbs any extra height when the block is stretched. */
+  last?: boolean;
+}) {
   const depth = useContext(DepthCtx);
   return (
     // Nested ifs hang their "+ else" strips below this row: reserve room for them.
-    <div className={`branch tone-${tone}${containsIf(nodes) ? " has-strips" : ""}`} data-branch={branchId}>
+    <div className={`branch tone-${tone}${containsIf(nodes) ? " has-strips" : ""}${last ? " last-row" : ""}`} data-branch={branchId}>
       <div className="block-head">
         <div className="head-row">{head}</div>
       </div>
@@ -408,7 +424,6 @@ function BlockBox({ children, kind }: { children: ReactNode; kind: BlockKind }) 
     <div
       className={`block block-${kind}`}
       style={{
-        ["--inset" as string]: `${2 + 4 * Math.min(depth, 3)}px`,
         // Nested if strips may sit on top of their parent's strip; keep them clickable.
         ["--depth" as string]: depth,
         // Deeper blocks get a stronger tint and border, so nesting reads at a glance.
@@ -487,6 +502,7 @@ function IfView({ node, handle }: { node: IfNode; handle: Handle }) {
         <BlockRow
           key={b.id}
           tone={i === 0 ? "if" : "else"}
+          last={!node.elseBranch && i === node.branches.length - 1}
           branchId={b.id}
           cid={b.id}
           nodes={b.children}
