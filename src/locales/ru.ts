@@ -14,6 +14,8 @@ export const ru: Messages = {
   copy: "Копировать",
   copied: "Скопировано!",
   download: "Скачать",
+  sendToGcsim: "Отправить в gcsim",
+  sendToGcsimHint: "Откроет gcsim.app с этим конфигом",
   addCharacter: "Добавить героя",
   chooseCharacter: "Выберите героя",
   chooseWeapon: "Выберите оружие",

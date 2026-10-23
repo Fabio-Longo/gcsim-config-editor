@@ -14,6 +14,8 @@ export const vi: Messages = {
   copy: "Sao chép",
   copied: "Đã sao chép!",
   download: "Tải xuống",
+  sendToGcsim: "Gửi tới gcsim",
+  sendToGcsimHint: "Mở gcsim.app với cấu hình này",
   addCharacter: "Thêm nhân vật",
   chooseCharacter: "Chọn nhân vật",
   chooseWeapon: "Chọn vũ khí",

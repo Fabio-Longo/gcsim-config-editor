@@ -13,6 +13,8 @@ export const en = {
   copy: "Copy",
   copied: "Copied!",
   download: "Download",
+  sendToGcsim: "Send to gcsim",
+  sendToGcsimHint: "Opens gcsim.app with this config",
   addCharacter: "Add character",
   chooseCharacter: "Choose character",
   chooseWeapon: "Choose weapon",

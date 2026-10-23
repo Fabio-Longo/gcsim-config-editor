@@ -14,6 +14,8 @@ export const tr: Messages = {
   copy: "Kopyala",
   copied: "Kopyalandı!",
   download: "İndir",
+  sendToGcsim: "gcsim'e gönder",
+  sendToGcsimHint: "gcsim.app'i bu yapılandırmayla açar",
   addCharacter: "Karakter ekle",
   chooseCharacter: "Karakter seç",
   chooseWeapon: "Silah seç",

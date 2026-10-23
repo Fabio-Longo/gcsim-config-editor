@@ -14,6 +14,8 @@ export const it: Messages = {
   copy: "Copia",
   copied: "Copiato!",
   download: "Scarica",
+  sendToGcsim: "Invia a gcsim",
+  sendToGcsimHint: "Apre gcsim.app con questa configurazione",
   addCharacter: "Aggiungi personaggio",
   chooseCharacter: "Scegli un personaggio",
   chooseWeapon: "Scegli un'arma",

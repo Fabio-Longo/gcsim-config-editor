@@ -14,6 +14,8 @@ export const id: Messages = {
   copy: "Salin",
   copied: "Disalin!",
   download: "Unduh",
+  sendToGcsim: "Kirim ke gcsim",
+  sendToGcsimHint: "Membuka gcsim.app dengan konfigurasi ini",
   addCharacter: "Tambah karakter",
   chooseCharacter: "Pilih karakter",
   chooseWeapon: "Pilih senjata",

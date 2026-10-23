@@ -14,6 +14,8 @@ export const th: Messages = {
   copy: "คัดลอก",
   copied: "คัดลอกแล้ว!",
   download: "ดาวน์โหลด",
+  sendToGcsim: "ส่งไปยัง gcsim",
+  sendToGcsimHint: "เปิด gcsim.app ด้วยคอนฟิกนี้",
   addCharacter: "เพิ่มตัวละคร",
   chooseCharacter: "เลือกตัวละคร",
   chooseWeapon: "เลือกอาวุธ",

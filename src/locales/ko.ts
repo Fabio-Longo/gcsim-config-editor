@@ -14,6 +14,8 @@ export const ko: Messages = {
   copy: "복사",
   copied: "복사됨!",
   download: "다운로드",
+  sendToGcsim: "gcsim으로 보내기",
+  sendToGcsimHint: "이 설정으로 gcsim.app을 엽니다",
   addCharacter: "캐릭터 추가",
   chooseCharacter: "캐릭터 선택",
   chooseWeapon: "무기 선택",

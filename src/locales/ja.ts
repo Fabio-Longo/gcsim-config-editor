@@ -14,6 +14,8 @@ export const ja: Messages = {
   copy: "コピー",
   copied: "コピーしました！",
   download: "ダウンロード",
+  sendToGcsim: "gcsim に送る",
+  sendToGcsimHint: "この設定で gcsim.app を開きます",
   addCharacter: "キャラクターを追加",
   chooseCharacter: "キャラクターを選択",
   chooseWeapon: "武器を選択",

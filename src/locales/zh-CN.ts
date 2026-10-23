@@ -14,6 +14,8 @@ export const zhCN: Messages = {
   copy: "复制",
   copied: "已复制！",
   download: "下载",
+  sendToGcsim: "发送到 gcsim",
+  sendToGcsimHint: "在 gcsim.app 中打开此配置",
   addCharacter: "添加角色",
   chooseCharacter: "选择角色",
   chooseWeapon: "选择武器",

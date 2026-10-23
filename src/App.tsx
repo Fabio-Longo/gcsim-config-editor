@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CharacterSlot } from "./components/CharacterSlot";
 import { Timeline } from "./components/Timeline";
 import { generateConfig } from "./config";
+import { gcsimSimulatorUrl } from "./gcsim";
 import { LANGS, useI18n, type Lang } from "./i18n";
 import { useAppState, type CharConfig } from "./state";
 
@@ -10,6 +11,18 @@ export function App() {
   const [state, dispatch] = useAppState();
   const [copied, setCopied] = useState(false);
   const config = useMemo(() => generateConfig(state), [state]);
+  // Built ahead of the click so the link opens as a plain new tab (no popup blocking).
+  const [gcsimUrl, setGcsimUrl] = useState<string | null>(null);
+  const title = t("title");
+  useEffect(() => {
+    let stale = false;
+    gcsimSimulatorUrl({ config, title, source: location.origin + location.pathname })
+      .then((url) => !stale && setGcsimUrl(url))
+      .catch(() => !stale && setGcsimUrl(null));
+    return () => {
+      stale = true;
+    };
+  }, [config, title]);
   const team = state.team.filter((c): c is CharConfig => !!c);
   const taken = team.map((c) => c.key);
 
@@ -94,6 +107,16 @@ export function App() {
             <div className="spacer" />
             <button onClick={copy}>{copied ? t("copied") : t("copy")}</button>
             <button onClick={download}>{t("download")}</button>
+            <a
+              className="button-link primary"
+              href={gcsimUrl ?? undefined}
+              aria-disabled={!gcsimUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={t("sendToGcsimHint")}
+            >
+              {t("sendToGcsim")} ↗
+            </a>
           </div>
           <pre className="output">{config}</pre>
         </section>
