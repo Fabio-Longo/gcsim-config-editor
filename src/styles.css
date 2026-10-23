@@ -90,20 +90,17 @@ main > section > h2, .section-head { margin-bottom: 10px; }
 .sub em { font-style: normal; }
 
 /* Rotation, laid out like tracks in a video editor. Everything is sized in whole tracks:
-   a card (or "+") plus its vertical margins is exactly one track, and a block row is as tall
-   as its tallest content, so cards inside blocks stay on the same rails as cards outside.
-   Block backgrounds cover exactly the cards' height; only the header/footer pills stick out
-   into the rail gap between tracks. */
+   a card (or "+") plus its margins is exactly one track, and a block row is as tall as its
+   tallest content, so cards inside blocks stay on the same rails as cards outside.
+   The top margin is larger: block headers live there without pushing cards down. */
 :root {
   --card-w: 98px;
   --card-h: 150px;
-  --track-pad: 20px;
-  --track: calc(var(--card-h) + 2 * var(--track-pad));
+  --pad-top: 34px;
+  --pad-bottom: 14px;
+  --track: calc(var(--card-h) + var(--pad-top) + var(--pad-bottom));
   --gap: 10px;
   --block-pad: 8px;
-  --pill-h: 22px;
-  /* How far a pill reaches into its block; the rest sits in the rail gap, clear of the cards. */
-  --pill-overlap: 4px;
 }
 .rotation-panel { overflow-x: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; }
 /* Rails: a line under every track, across the whole scroll width. */
@@ -120,36 +117,37 @@ main > section > h2, .section-head { margin-bottom: 10px; }
 .node.dragging-src { opacity: 0.35; }
 /* Insertion marker drawn outside the box so it never shifts the layout. */
 .node.drop-before::before, .node.drop-after::after {
-  content: ""; position: absolute; top: var(--track-pad); bottom: var(--track-pad); width: 4px; border-radius: 2px; background: var(--accent);
+  content: ""; position: absolute; top: var(--pad-top); bottom: var(--pad-bottom); width: 4px; border-radius: 2px; background: var(--accent);
 }
 .node.drop-before::before { left: calc(var(--gap) / -2 - 2px); }
 .node.drop-after::after { right: calc(var(--gap) / -2 - 2px); }
 
-/* Blocks */
+/* Blocks: a tinted background with a hairline border. --inset (set per nesting depth) is the
+   distance from the track edge, so nested blocks sit visibly inside their parent. */
 .block { display: flex; flex-direction: column; }
 .branch { position: relative; display: flex; flex-direction: column; animation: enter 0.16s ease-out; }
 .tone-group { --tone: #4f7fa8; }
 .tone-while { --tone: #8a6bbf; }
 .tone-if { --tone: #6cc070; }
 .tone-else { --tone: #e2605a; }
-/* Tinted background + hairline border, inset to the cards' top and bottom edges. */
+/* Rows of one if/else touch each other, so the block's background is continuous. */
 .branch::before {
-  content: ""; position: absolute; left: 0; right: 0; top: var(--track-pad); bottom: var(--track-pad);
-  background: color-mix(in srgb, var(--tone) 10%, transparent); border: 1px solid color-mix(in srgb, var(--tone) 45%, transparent);
-  border-radius: 8px; pointer-events: none;
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: color-mix(in srgb, var(--tone) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tone) 45%, transparent); border-top-style: none; border-bottom-style: none;
 }
+.branch:first-child::before { top: var(--inset); border-top-style: solid; border-radius: 8px 8px 0 0; }
+.branch:last-child::before { bottom: var(--inset); border-bottom-style: solid; border-radius: 0 0 8px 8px; }
+.branch:first-child:last-child::before { border-radius: 8px; }
+.branch + .branch::before { border-top: 1px dashed color-mix(in srgb, var(--tone) 45%, transparent); }
 .branch > .lane { position: relative; padding: 0 var(--block-pad); }
-/* Header and footer take no height; their pills sit on the block's top/bottom edge. */
-.block-head, .block-foot { position: relative; z-index: 2; height: 0; display: flex; gap: 6px; padding-left: 12px; }
-.pill {
-  flex: none; height: var(--pill-h); display: inline-flex; align-items: center; gap: 5px; padding: 0 6px;
-  background: var(--panel-2); border: 1px solid color-mix(in srgb, var(--tone, #888) 55%, transparent); border-radius: 6px;
-  font-size: 12px; white-space: nowrap;
-}
-.block-head .pill { margin-top: calc(var(--track-pad) - var(--pill-h) + var(--pill-overlap)); }
-.block-foot .pill { --tone: #e2605a; margin-top: calc(-1 * var(--track-pad) - var(--pill-overlap)); font-size: 11px; }
+/* The header takes no height; it sits in the top margin, above the cards. */
+.block-head { position: relative; z-index: 2; height: 0; display: flex; padding-left: var(--block-pad); }
+.head-row { display: flex; align-items: center; gap: 6px; height: 20px; margin-top: calc(var(--inset) + 5px); font-size: 12px; white-space: nowrap; }
+.branch:not(:first-child) > .block-head .head-row { margin-top: 6px; }
+.head-btn { font-size: 11px; padding: 1px 6px; }
 .grip { display: flex; align-items: center; gap: 4px; font-weight: 600; cursor: grab; user-select: none; touch-action: none; white-space: nowrap; }
-.cond { box-sizing: content-box; height: 18px; padding: 0 4px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; min-width: 4ch; }
+.cond { box-sizing: content-box; height: 16px; padding: 0 4px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; min-width: 4ch; }
 .kw { font-family: ui-monospace, Consolas, monospace; font-weight: 700; }
 .kw-if { color: #6cc070; }
 .kw-else { color: #e2605a; }
@@ -161,7 +159,7 @@ main > section > h2, .section-head { margin-bottom: 10px; }
 
 /* Cards: one fixed size for every action, wait included. */
 .card {
-  position: relative; width: var(--card-w); height: var(--card-h); margin: var(--track-pad) 0; overflow: hidden;
+  position: relative; width: var(--card-w); height: var(--card-h); margin: var(--pad-top) 0 var(--pad-bottom); overflow: hidden;
   background: var(--panel-2); border: 1px solid var(--border); border-bottom: 3px solid var(--elem); border-radius: 8px;
   padding: 10px 6px 6px; display: flex; flex-direction: column; align-items: center; gap: 3px;
   cursor: grab; user-select: none; touch-action: none;
@@ -174,7 +172,7 @@ main > section > h2, .section-head { margin-bottom: 10px; }
 .counter { display: flex; align-items: center; gap: 4px; font-size: 12px; }
 .counter button { padding: 0 6px; line-height: 18px; }
 .add-action {
-  flex: none; width: 40px; height: var(--card-h); margin: var(--track-pad) 0; font-size: 24px; color: var(--muted);
+  flex: none; width: 40px; height: var(--card-h); margin: var(--pad-top) 0 var(--pad-bottom); font-size: 24px; color: var(--muted);
   background: transparent; border: 2px dashed var(--border);
 }
 

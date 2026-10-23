@@ -40,13 +40,13 @@ const clampSeconds = (v: number) => Math.max(0.1, Math.min(60, Math.round((Numbe
 const stop = (e: PointerEvent | KeyboardEvent) => e.stopPropagation();
 
 /**
- * Nested blocks share their top (and bottom) edge, so a block placed first inside another
- * would draw its pill right over the parent's. Shift such pills to the right of the ones
- * already placed. Rows are visited in DOM order, so parents are placed before children.
+ * A block placed first inside another block starts almost at the parent's left edge, so its
+ * header would be drawn over the parent's header. Only in that case, move it just past the
+ * header in the way. Rows are visited in DOM order, so parents are placed before children.
  * Positions come from offsetLeft/offsetTop, which ignore the enter animation's scale.
  */
-function layoutPills(root: HTMLElement) {
-  const rows = [...root.querySelectorAll<HTMLElement>(".block-head, .block-foot")];
+function layoutHeaders(root: HTMLElement) {
+  const rows = [...root.querySelectorAll<HTMLElement>(".block-head")];
   rows.forEach((r) => (r.style.paddingLeft = ""));
   const posOf = (el: HTMLElement) => {
     let x = 0, y = 0;
@@ -57,10 +57,10 @@ function layoutPills(root: HTMLElement) {
     return { x, y };
   };
   const boxOf = (row: HTMLElement) => {
-    const pills = [...row.children] as HTMLElement[];
-    const first = posOf(pills[0]);
-    const last = pills[pills.length - 1];
-    return { left: first.x, top: first.y, right: posOf(last).x + last.offsetWidth, bottom: first.y + pills[0].offsetHeight };
+    const items = [...row.children] as HTMLElement[];
+    const first = posOf(items[0]);
+    const last = items[items.length - 1];
+    return { left: first.x, top: first.y, right: posOf(last).x + last.offsetWidth, bottom: first.y + items[0].offsetHeight };
   };
   const placed: ReturnType<typeof boxOf>[] = [];
   for (const row of rows) {
@@ -70,7 +70,7 @@ function layoutPills(root: HTMLElement) {
       moved = false;
       for (const p of placed) {
         if (box.left < p.right && box.right > p.left && box.top < p.bottom && box.bottom > p.top) {
-          // Pills start at the row's left padding: move them to just past the pill in the way.
+          // The header starts at the row's left padding: move it just past the header in the way.
           row.style.paddingLeft = `${p.right + 6 - posOf(row).x}px`;
           box = boxOf(row);
           moved = true;
@@ -92,9 +92,9 @@ export function Timeline({ team, rotation, dispatch }: Props) {
   const { lang } = useI18n();
   const [addTo, setAddTo] = useState<string | null>(null);
   const tracksRef = useRef<HTMLDivElement>(null);
-  // Pill widths depend on conditions and on the UI language.
+  // Header widths depend on conditions and on the UI language.
   useLayoutEffect(() => {
-    if (tracksRef.current) layoutPills(tracksRef.current);
+    if (tracksRef.current) layoutHeaders(tracksRef.current);
   }, [rotation, lang]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [drop, setDrop] = useState<DropTarget | null>(null);
@@ -328,19 +328,35 @@ function Keyword({ word }: { word: "if" | "else if" | "else" | "while" }) {
   return <span className={`kw kw-${word}`}>{word}</span>;
 }
 
+/** Nesting depth of the lane being rendered; blocks step their background inward per level. */
+const DepthCtx = createContext(0);
+
 /**
- * One row of a block. Its tinted background covers exactly the cards' height; the header
- * pill sits on the top edge and takes no height, so cards inside stay level with cards outside.
+ * One row of a block. The header (keyword, condition, buttons) takes no height: it sits in the
+ * block's top padding, so cards inside stay level with cards outside.
  */
 function BlockRow({
   head, cid, nodes, branchId, tone,
 }: { head: ReactNode; cid: string; nodes: RNode[]; branchId?: string; tone: "group" | "while" | "if" | "else" }) {
+  const depth = useContext(DepthCtx);
   return (
     <div className={`branch tone-${tone}`} data-branch={branchId}>
       <div className="block-head">
-        <div className="pill">{head}</div>
+        <div className="head-row">{head}</div>
       </div>
-      <Lane cid={cid} nodes={nodes} />
+      <DepthCtx.Provider value={depth + 1}>
+        <Lane cid={cid} nodes={nodes} />
+      </DepthCtx.Provider>
+    </div>
+  );
+}
+
+/** Block wrapper: its background inset from the track edge grows with nesting depth. */
+function BlockBox({ children }: { children: ReactNode }) {
+  const depth = useContext(DepthCtx);
+  return (
+    <div className="block" style={{ ["--inset" as string]: `${2 + 4 * Math.min(depth, 3)}px` }}>
+      {children}
     </div>
   );
 }
@@ -350,7 +366,7 @@ function BlockView({ node, handle }: { node: Exclude<RNode, ActionNode>; handle:
   const { dispatch } = useContext(RotationCtx);
   if (node.kind === "group")
     return (
-      <div className="block">
+      <BlockBox>
         <BlockRow
           tone="group"
           cid={node.id}
@@ -364,11 +380,11 @@ function BlockView({ node, handle }: { node: Exclude<RNode, ActionNode>; handle:
             </>
           }
         />
-      </div>
+      </BlockBox>
     );
   if (node.kind === "while")
     return (
-      <div className="block">
+      <BlockBox>
         <BlockRow
           tone="while"
           cid={node.id}
@@ -383,7 +399,7 @@ function BlockView({ node, handle }: { node: Exclude<RNode, ActionNode>; handle:
             </>
           }
         />
-      </div>
+      </BlockBox>
     );
   return <IfView node={node} handle={handle} />;
 }
@@ -406,7 +422,7 @@ function IfView({ node, handle }: { node: IfNode; handle: Handle }) {
     </button>
   );
   return (
-    <div className="block">
+    <BlockBox>
       {node.branches.map((b, i) => (
         <BlockRow
           key={b.id}
@@ -424,6 +440,18 @@ function IfView({ node, handle }: { node: IfNode; handle: Handle }) {
                 <Keyword word="else if" />
               )}
               <CondInput value={b.cond} onChange={(cond) => dispatch({ type: "setBranchCond", ifId: node.id, branchId: b.id, cond })} />
+              {i === 0 && (
+                <>
+                  <button className="head-btn" onPointerDown={stop} onClick={() => dispatch({ type: "addBranch", ifId: node.id, branch: "elif" })}>
+                    + <Keyword word="else if" />
+                  </button>
+                  {!node.elseBranch && (
+                    <button className="head-btn" onPointerDown={stop} onClick={() => dispatch({ type: "addBranch", ifId: node.id, branch: "else" })}>
+                      + <Keyword word="else" />
+                    </button>
+                  )}
+                </>
+              )}
               {i === 0 ? <NodeButtons id={node.id} /> : removeBranch(b)}
             </>
           }
@@ -443,18 +471,7 @@ function IfView({ node, handle }: { node: IfNode; handle: Handle }) {
           }
         />
       )}
-      {/* Sits on the bottom edge of the last row and, like the header, takes no height. */}
-      <div className="block-foot">
-        <button className="pill" onPointerDown={stop} onClick={() => dispatch({ type: "addBranch", ifId: node.id, branch: "elif" })}>
-          + <Keyword word="else if" />
-        </button>
-        {!node.elseBranch && (
-          <button className="pill" onPointerDown={stop} onClick={() => dispatch({ type: "addBranch", ifId: node.id, branch: "else" })}>
-            + <Keyword word="else" />
-          </button>
-        )}
-      </div>
-    </div>
+    </BlockBox>
   );
 }
 
