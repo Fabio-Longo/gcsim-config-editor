@@ -148,16 +148,16 @@ main > section > h2, .section-head { margin-bottom: 10px; }
 .branch:first-child:last-child::before { border-radius: 8px; }
 .branch + .branch::before { border-top: 1px dashed color-mix(in srgb, var(--tone) var(--edge), transparent); }
 .branch > .lane { position: relative; padding: 0 var(--block-pad); }
-/* A header shifted past another block's header: cut that header's area out of this block's
-   background and draw the border around the cut, so the border seems to make way for it. */
-.branch.notched::before {
-  clip-path: polygon(var(--notch-w) 0, 100% 0, 100% 100%, 0 100%, 0 var(--notch-h), var(--notch-w) var(--notch-h));
+/* A row with nested ifs grows by one strip at the bottom, so the next row (or this if's own
+   strip) starts below the nested strips instead of colliding with them. */
+.branch.has-strips { padding-bottom: var(--peek-h); }
+/* Hover: the innermost block under the pointer and everything nested in it light up. */
+.branch::before, .peek-row { transition: filter 0.12s, box-shadow 0.12s; }
+.block:hover:not(:has(.block:hover)) .branch::before,
+.block:hover:not(:has(.block:hover)) .peek-row {
+  filter: brightness(1.45) saturate(1.2);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--tone) 85%, transparent);
 }
-.branch.notched::after {
-  content: ""; position: absolute; left: 0; top: var(--inset); width: var(--notch-w); height: var(--notch-h); pointer-events: none;
-  border: 1px solid color-mix(in srgb, var(--tone) var(--edge), transparent); border-top: none; border-left: none; border-bottom-right-radius: 6px;
-}
-.branch.notched:not(:first-child)::after { top: 0; }
 /* An if's last row continues into a strip that peeks into the next rail; it takes no height,
    so the cards below stay on their rails. */
 /* Deeper strips stack above shallower ones. inline-size containment: a shifted strip may
@@ -172,7 +172,7 @@ main > section > h2, .section-head { margin-bottom: 10px; }
 }
 /* The header takes no height; it sits in the top margin, above the cards. */
 .block-head { position: relative; z-index: 2; height: 0; display: flex; padding-left: var(--block-pad); }
-.head-row { display: flex; align-items: center; gap: 6px; height: 20px; margin-top: calc(var(--inset) + 5px); font-size: 12px; white-space: nowrap; }
+.head-row { display: flex; align-items: center; gap: 6px; height: 20px; margin-top: min(calc(var(--inset) + 5px), calc(var(--pad-top) - 22px)); font-size: 12px; white-space: nowrap; }
 .branch:not(:first-child) > .block-head .head-row { margin-top: 6px; }
 .head-btn { font-size: 11px; padding: 1px 6px; }
 .grip { display: flex; align-items: center; gap: 4px; font-weight: 600; cursor: grab; user-select: none; touch-action: none; white-space: nowrap; }

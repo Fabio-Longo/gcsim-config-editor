@@ -83,6 +83,11 @@ export function containersOf(n: RNode): [string, RNode[]][] {
   }
 }
 
+/** True if any if block sits anywhere in `nodes` (at any depth). */
+export function containsIf(nodes: RNode[]): boolean {
+  return nodes.some((n) => n.kind === "if" || containersOf(n).some(([, list]) => containsIf(list)));
+}
+
 /** Rebuilds the tree, letting `f` rewrite every container's children (bottom-up). */
 export function mapContainers(root: RNode[], f: (children: RNode[], containerId: string) => RNode[]): RNode[] {
   const walk = (children: RNode[], cid: string): RNode[] => f(children.map(walkNode), cid);

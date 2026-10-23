@@ -61,7 +61,7 @@ const dict = {
   "block.group": { en: "Action block", ru: "Блок действий" },
   condPlaceholder: { en: "condition", ru: "условие" },
   condExample: { en: "Condition, e.g. .xiangling.burst.ready", ru: "Условие, напр. .xiangling.burst.ready" },
-  skipOnCooldown: { en: "Skip if on cooldown", ru: "Пропустить, если на перезарядке" },
+  skipOnCooldown: { en: "Skip if not ready", ru: "Пропустить, если не готово" },
   notesFromGcsim: { en: "gcsim notes:", ru: "Примечания gcsim:" },
 
   "action.attack": { en: "Attack", ru: "Атака" },

@@ -9,7 +9,7 @@ import {
 import { CAN_SKIP, charByKey, COUNTABLE, ELEMENT_COLORS, img } from "../data";
 import { useI18n } from "../i18n";
 import {
-  findContainer, findNode, newBlock, parseSeconds, ROOT, secondsToFrames, subtreeIds, uid, type ActionNode, type BlockKind, type Branch, type IfNode,
+  containsIf, findContainer, findNode, newBlock, parseSeconds, ROOT, secondsToFrames, subtreeIds, uid, type ActionNode, type BlockKind, type Branch, type IfNode,
   type RNode,
 } from "../rotation";
 import type { Action, CharConfig } from "../state";
@@ -41,25 +41,21 @@ const stop = (e: PointerEvent | KeyboardEvent) => e.stopPropagation();
 /**
  * Resolves overlaps between block headers and if bottom strips, which only happen when one
  * block sits at the very edge of another. Priority decides who stays and who moves right:
- *  1. Headers, in DOM order (parents first). A header that has to move also gets its block's
- *     background notched around the obstacle, so the obstacle keeps its own color underneath.
- *  2. Bottom strips, parents first: an else-if header and the parent's strip keep their
- *     place, and the nested if's strip starts just past them.
+ *  1. Headers, in DOM order (parents first). A block whose header would overlap moves right
+ *     as a whole, so its header starts just past the one in the way.
+ *  2. Bottom strips, parents first. Rows holding nested ifs already reserve room below for
+ *     their strips (see .has-strips), so this is only a fallback for leftover overlaps.
  * Positions come from offsetLeft/offsetTop, which ignore the enter animation's scale.
  */
 function layoutHeaders(root: HTMLElement) {
   const heads = [...root.querySelectorAll<HTMLElement>(".block-head")];
   // A nested if's strip comes before its parent's in DOM order; reversed, parents go first.
   const strips = [...root.querySelectorAll<HTMLElement>(".branch-peek")].reverse();
-  [...heads, ...strips].forEach((r) => {
-    r.style.paddingLeft = "";
-    (r.firstElementChild as HTMLElement | null)?.style.removeProperty("margin-left");
+  root.querySelectorAll<HTMLElement>("[data-shifted]").forEach((n) => {
+    n.style.removeProperty("margin-left");
+    delete n.dataset.shifted;
   });
-  root.querySelectorAll<HTMLElement>(".branch.notched").forEach((b) => {
-    b.classList.remove("notched");
-    b.style.removeProperty("--notch-w");
-    b.style.removeProperty("--notch-h");
-  });
+  strips.forEach((r) => (r.firstElementChild as HTMLElement | null)?.style.removeProperty("margin-left"));
   const posOf = (el: HTMLElement) => {
     let x = 0, y = 0;
     for (let e: HTMLElement | null = el; e && e !== root; e = e.offsetParent as HTMLElement | null) {
@@ -74,58 +70,42 @@ function layoutHeaders(root: HTMLElement) {
     return { left: x, top: y, right: x + el.offsetWidth, bottom: y + el.offsetHeight };
   };
   const hit = (a: Box, b: Box) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
-
-  const placed: Box[] = [];
   /** A strip's background spans its whole block; only the part up to its last button counts. */
   const stripBoxOf = (strip: HTMLElement): Box => {
     const box = boxOf(strip);
     const last = strip.lastElementChild as HTMLElement | null;
     return last ? { ...box, right: posOf(last).x + last.offsetWidth + 6 } : box;
   };
-  /** Moves `content` right (via `shift`) until it clears everything placed; returns what it hit. */
-  const place = (content: HTMLElement, shift: (x: number) => void, measure = boxOf) => {
+
+  const placed: Box[] = [];
+  /** Moves `content` right (via `shift`, given the needed distance) until it clears everything placed. */
+  const place = (content: HTMLElement, shift: (by: number) => void, measure = boxOf) => {
     let box = measure(content);
-    const obstacles: Box[] = [];
     for (let moved = true; moved; ) {
       moved = false;
       for (const p of placed) {
         if (hit(box, p)) {
-          shift(p.right);
+          shift(p.right + 6 - box.left);
           box = measure(content);
-          obstacles.push(p);
           moved = true;
         }
       }
     }
     placed.push(box);
-    return obstacles;
   };
 
   for (const row of heads) {
     const content = row.firstElementChild as HTMLElement | null;
-    if (!content) continue;
-    // The header starts at the row's left padding: move it just past the obstacle.
-    const obstacles = place(content, (right) => (row.style.paddingLeft = `${right + 6 - posOf(row).x}px`));
-    if (obstacles.length) notch(row.parentElement as HTMLElement, obstacles);
+    const node = row.closest<HTMLElement>(".node");
+    if (!content || !node) continue;
+    place(content, (by) => {
+      node.style.marginLeft = `${(parseFloat(node.style.marginLeft) || 0) + by}px`;
+      node.dataset.shifted = "";
+    });
   }
   for (const row of strips) {
     const content = row.firstElementChild as HTMLElement | null;
-    // The strip is its own background, so it simply starts later; nothing to notch.
-    if (content) place(content, (right) => (content.style.marginLeft = `${right + 4 - posOf(row).x}px`), stripBoxOf);
-  }
-
-  /** Cuts the obstacles' area out of the top-left corner of the branch's background. */
-  function notch(branch: HTMLElement, obstacles: Box[]) {
-    const b = posOf(branch);
-    // The background starts --inset below the branch top, but only on a block's first row.
-    const first = branch.parentElement?.firstElementChild === branch;
-    const bgTop = b.y + (first ? parseFloat(getComputedStyle(branch).getPropertyValue("--inset")) || 0 : 0);
-    const w = Math.max(...obstacles.map((o) => o.right)) + 3 - b.x;
-    const h = Math.max(...obstacles.map((o) => o.bottom)) + 3 - bgTop;
-    if (w <= 0 || h <= 0) return;
-    branch.classList.add("notched");
-    branch.style.setProperty("--notch-w", `${w}px`);
-    branch.style.setProperty("--notch-h", `${h}px`);
+    if (content) place(content, (by) => (content.style.marginLeft = `${(parseFloat(content.style.marginLeft) || 0) + by}px`), stripBoxOf);
   }
 }
 
@@ -409,7 +389,8 @@ function BlockRow({
 }: { head: ReactNode; cid: string; nodes: RNode[]; branchId?: string; tone: "group" | "while" | "if" | "else" }) {
   const depth = useContext(DepthCtx);
   return (
-    <div className={`branch tone-${tone}`} data-branch={branchId}>
+    // Nested ifs hang their "+ else" strips below this row: reserve room for them.
+    <div className={`branch tone-${tone}${containsIf(nodes) ? " has-strips" : ""}`} data-branch={branchId}>
       <div className="block-head">
         <div className="head-row">{head}</div>
       </div>
