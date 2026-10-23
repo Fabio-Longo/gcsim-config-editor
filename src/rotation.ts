@@ -47,6 +47,20 @@ export type BlockKind = "group" | "while" | "if";
 
 export const ROOT = "root";
 
+/** gcsim counts time in frames, 60 per second. */
+export const FPS = 60;
+
+/** Parses "1.25" or "1,25" seconds; null for anything that is not a positive number. Capped at 10 min. */
+export function parseSeconds(text: string): number | null {
+  const n = Number(text.trim().replace(",", "."));
+  return Number.isFinite(n) && n > 0 ? Math.min(n, 600) : null;
+}
+
+/** Whole frames for a wait, never below 1; falls back to 1 s for corrupt values. */
+export function secondsToFrames(seconds: number | undefined): number {
+  return seconds !== undefined && Number.isFinite(seconds) && seconds > 0 ? Math.max(1, Math.round(seconds * FPS)) : FPS;
+}
+
 let nextId = Date.now();
 export const uid = () => (nextId++).toString(36);
 

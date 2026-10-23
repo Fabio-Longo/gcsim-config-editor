@@ -1,5 +1,5 @@
 import {
-  createContext, useContext, useLayoutEffect, useRef, useState, type Dispatch, type HTMLAttributes, type KeyboardEvent, type PointerEvent,
+  createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type Dispatch, type HTMLAttributes, type KeyboardEvent, type PointerEvent,
   type ReactNode,
 } from "react";
 import {
@@ -9,7 +9,7 @@ import {
 import { CAN_SKIP, charByKey, COUNTABLE, ELEMENT_COLORS, img } from "../data";
 import { useI18n } from "../i18n";
 import {
-  findContainer, findNode, newBlock, ROOT, subtreeIds, uid, type ActionNode, type BlockKind, type Branch, type IfNode,
+  findContainer, findNode, newBlock, parseSeconds, ROOT, secondsToFrames, subtreeIds, uid, type ActionNode, type BlockKind, type Branch, type IfNode,
   type RNode,
 } from "../rotation";
 import type { Action, CharConfig } from "../state";
@@ -36,7 +36,6 @@ const RotationCtx = createContext<Ctx>(null!);
 // Droppable ids: a node uses its own id, a container (lane) uses "c:" + its id.
 const laneId = (cid: string) => `c:${cid}`;
 
-const clampSeconds = (v: number) => Math.max(0.1, Math.min(60, Math.round((Number.isFinite(v) ? v : 1) * 10) / 10));
 const stop = (e: PointerEvent | KeyboardEvent) => e.stopPropagation();
 
 /**
@@ -49,7 +48,10 @@ const stop = (e: PointerEvent | KeyboardEvent) => e.stopPropagation();
  */
 function layoutHeaders(root: HTMLElement) {
   const rows = [...root.querySelectorAll<HTMLElement>(".block-head, .branch-peek")];
-  rows.forEach((r) => (r.style.paddingLeft = ""));
+  rows.forEach((r) => {
+    r.style.paddingLeft = "";
+    (r.firstElementChild as HTMLElement | null)?.style.removeProperty("margin-left");
+  });
   root.querySelectorAll<HTMLElement>(".branch.notched").forEach((b) => {
     b.classList.remove("notched");
     b.style.removeProperty("--notch-w");
@@ -75,8 +77,19 @@ function layoutHeaders(root: HTMLElement) {
     const content = row.firstElementChild as HTMLElement | null;
     if (!content) continue;
     let box = boxOf(content);
-    // Bottom strips never move; they are only obstacles for headers further down.
     if (row.classList.contains("branch-peek")) {
+      // An if nested at the end of another if ends on the same rail, so both strips would
+      // stack; start the later (outer) strip just past the earlier one.
+      for (let moved = true; moved; ) {
+        moved = false;
+        for (const p of placed) {
+          if (hit(box, p)) {
+            content.style.marginLeft = `${p.right + 4 - posOf(row).x}px`;
+            box = boxOf(content);
+            moved = true;
+          }
+        }
+      }
       placed.push(box);
       continue;
     }
@@ -295,14 +308,7 @@ function ActionCard({ item, handle }: { item: ActionNode; handle?: Handle }) {
       <div className="card-action">{t(`action.${item.action}`)}</div>
       {isWait && (
         <div className="counter" onPointerDown={stop} onKeyDown={stop}>
-          <input
-            type="number"
-            min={0.1}
-            max={60}
-            step={0.1}
-            value={item.seconds ?? 1}
-            onChange={(e) => update({ seconds: clampSeconds(+e.target.value) })}
-          />
+          <SecondsInput value={item.seconds ?? 1} onChange={(seconds) => update({ seconds })} />
           <span>{t("seconds")}</span>
         </div>
       )}
@@ -324,6 +330,34 @@ function ActionCard({ item, handle }: { item: ActionNode; handle?: Handle }) {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Seconds as a decimal ("1.25" or "1,25"). Keeps the raw text while typing so "1." or "0,"
+ * aren't rejected mid-edit; only valid positive numbers reach the state.
+ */
+function SecondsInput({ value, onChange, onEnter }: { value: number; onChange: (v: number) => void; onEnter?: () => void }) {
+  const [text, setText] = useState(String(value));
+  // Follow outside changes (e.g. undo or duplicate) without fighting the user's typing.
+  useEffect(() => {
+    if (parseSeconds(text) !== value) setText(String(value));
+  }, [value]);
+  const frames = secondsToFrames(value);
+  return (
+    <input
+      className="seconds"
+      inputMode="decimal"
+      value={text}
+      title={`${frames} frames`}
+      onChange={(e) => {
+        setText(e.target.value);
+        const v = parseSeconds(e.target.value);
+        if (v !== null) onChange(v);
+      }}
+      onBlur={() => setText(String(value))}
+      onKeyDown={(e) => e.key === "Enter" && onEnter?.()}
+    />
   );
 }
 
@@ -386,7 +420,15 @@ function BlockRow({
 function BlockBox({ children, kind }: { children: ReactNode; kind: BlockKind }) {
   const depth = useContext(DepthCtx);
   return (
-    <div className={`block block-${kind}`} style={{ ["--inset" as string]: `${2 + 4 * Math.min(depth, 3)}px` }}>
+    <div
+      className={`block block-${kind}`}
+      style={{
+        ["--inset" as string]: `${2 + 4 * Math.min(depth, 3)}px`,
+        // Deeper blocks get a stronger tint and border, so nesting reads at a glance.
+        ["--tint" as string]: `${10 + 6 * Math.min(depth, 4)}%`,
+        ["--edge" as string]: `${40 + 12 * Math.min(depth, 4)}%`,
+      }}
+    >
       {children}
     </div>
   );
@@ -530,7 +572,7 @@ function AddDialog({
   };
   const add = (action: string) =>
     addNode({ id: uid(), kind: "action", char: char!, action, count: COUNTABLE.has(action) ? count : 1 });
-  const addWait = () => addNode({ id: uid(), kind: "action", char: "", action: "wait", count: 1, seconds: clampSeconds(seconds) });
+  const addWait = () => addNode({ id: uid(), kind: "action", char: "", action: "wait", count: 1, seconds });
   const addBlock = (kind: BlockKind) => addNode(newBlock(kind));
 
   return (
@@ -597,15 +639,7 @@ function AddDialog({
         )}
         <div className="wait-row">
           <span>{t("orWait")}</span>
-          <input
-            type="number"
-            min={0.1}
-            max={60}
-            step={0.1}
-            value={seconds}
-            onChange={(e) => setSeconds(+e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addWait()}
-          />
+          <SecondsInput value={seconds} onChange={setSeconds} onEnter={addWait} />
           <span>{t("seconds")}</span>
           <button onClick={addWait}>⏳ {t("action.wait")}</button>
         </div>

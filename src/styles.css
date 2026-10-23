@@ -100,7 +100,11 @@ main > section > h2, .section-head { margin-bottom: 10px; }
   --pad-bottom: 14px;
   --track: calc(var(--card-h) + var(--pad-top) + var(--pad-bottom));
   --gap: 10px;
-  --block-pad: 8px;
+  /* Side padding inside blocks: also the drop area before a block's first card. */
+  --block-pad: 16px;
+  /* Block tint and border strength; blocks raise both with nesting depth. */
+  --tint: 10%;
+  --edge: 40%;
   /* Height of an if's bottom strip with the "+ else if / + else" buttons. */
   --peek-h: 28px;
 }
@@ -136,13 +140,13 @@ main > section > h2, .section-head { margin-bottom: 10px; }
 /* Rows of one if/else touch each other, so the block's background is continuous. */
 .branch::before {
   content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: color-mix(in srgb, var(--tone) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--tone) 45%, transparent); border-top-style: none; border-bottom-style: none;
+  background: color-mix(in srgb, var(--tone) var(--tint), transparent);
+  border: 1px solid color-mix(in srgb, var(--tone) var(--edge), transparent); border-top-style: none; border-bottom-style: none;
 }
 .branch:first-child::before { top: var(--inset); border-top-style: solid; border-radius: 8px 8px 0 0; }
 .branch:last-child::before { bottom: var(--inset); border-bottom-style: solid; border-radius: 0 0 8px 8px; }
 .branch:first-child:last-child::before { border-radius: 8px; }
-.branch + .branch::before { border-top: 1px dashed color-mix(in srgb, var(--tone) 45%, transparent); }
+.branch + .branch::before { border-top: 1px dashed color-mix(in srgb, var(--tone) var(--edge), transparent); }
 .branch > .lane { position: relative; padding: 0 var(--block-pad); }
 /* A header shifted past another block's header: cut that header's area out of this block's
    background and draw the border around the cut, so the border seems to make way for it. */
@@ -151,7 +155,7 @@ main > section > h2, .section-head { margin-bottom: 10px; }
 }
 .branch.notched::after {
   content: ""; position: absolute; left: 0; top: var(--inset); width: var(--notch-w); height: var(--notch-h); pointer-events: none;
-  border: 1px solid color-mix(in srgb, var(--tone) 45%, transparent); border-top: none; border-left: none; border-bottom-right-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--tone) var(--edge), transparent); border-top: none; border-left: none; border-bottom-right-radius: 6px;
 }
 .branch.notched:not(:first-child)::after { top: 0; }
 /* An if's last row continues into a strip that peeks into the next rail; it takes no height,
@@ -160,8 +164,8 @@ main > section > h2, .section-head { margin-bottom: 10px; }
 .peek-row {
   --tone: #e2605a;
   height: var(--peek-h); display: flex; align-items: center; gap: 6px; padding: 0 var(--block-pad); white-space: nowrap;
-  background: color-mix(in srgb, var(--tone) 10%, transparent); border: 1px solid color-mix(in srgb, var(--tone) 45%, transparent);
-  border-top: 1px dashed color-mix(in srgb, var(--tone) 45%, transparent); border-radius: 0 0 8px 8px;
+  background: color-mix(in srgb, var(--tone) var(--tint), transparent); border: 1px solid color-mix(in srgb, var(--tone) var(--edge), transparent);
+  border-top: 1px dashed color-mix(in srgb, var(--tone) var(--edge), transparent); border-radius: 0 0 8px 8px;
 }
 /* The header takes no height; it sits in the top margin, above the cards. */
 .block-head { position: relative; z-index: 2; height: 0; display: flex; padding-left: var(--block-pad); }
@@ -195,8 +199,9 @@ main > section > h2, .section-head { margin-bottom: 10px; }
 .counter button { padding: 0 6px; line-height: 18px; }
 .add-action {
   flex: none; width: 40px; height: var(--card-h); margin: var(--pad-top) 0 var(--pad-bottom); font-size: 24px; color: var(--muted);
-  background: transparent; border: 2px dashed var(--border);
+  background: transparent; border: 2px dashed color-mix(in srgb, var(--muted) 70%, transparent);
 }
+.add-action:hover { color: var(--accent); border-color: var(--accent); }
 
 @keyframes enter { from { opacity: 0; transform: scale(0.92); } }
 @keyframes leave { to { opacity: 0; transform: scale(0.92); } }
@@ -242,3 +247,5 @@ main > section > h2, .section-head { margin-bottom: 10px; }
 .skip { display: flex; align-items: flex-start; gap: 4px; font-size: 10px; line-height: 1.2; color: var(--muted); cursor: pointer; }
 .skip input { margin: 0; flex: none; }
 .sub span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seconds { width: 48px; padding: 1px 4px; text-align: right; font-size: 12px; }
+.wait-row .seconds { width: 64px; font-size: 14px; padding: 4px 6px; }

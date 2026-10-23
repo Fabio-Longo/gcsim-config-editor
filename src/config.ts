@@ -1,5 +1,5 @@
 import { CAN_SKIP, STATS, statByKey } from "./data";
-import { containersOf, type ActionNode, type RNode } from "./rotation";
+import { containersOf, FPS, secondsToFrames, type ActionNode, type RNode } from "./rotation";
 import type { CharConfig, State } from "./state";
 
 const fmt = (key: string, uiValue: number) => {
@@ -49,7 +49,10 @@ const head = (keyword: string, cond: string) =>
   cond.trim() ? `${keyword} ${cond.trim()} {` : `${keyword} 0 { # TODO: condition`;
 
 function actionLine(r: ActionNode): string {
-  if (r.action === "wait") return `wait(${Math.round((r.seconds ?? 1) * 60)}); # ${r.seconds ?? 1}s`; // gcsim waits in frames (60/s)
+  if (r.action === "wait") {
+    const frames = secondsToFrames(r.seconds);
+    return `wait(${frames}); # ${+(frames / FPS).toFixed(3)}s`;
+  }
   if (r.skipOnCooldown && CAN_SKIP.has(r.action)) return `if .${r.char}.${r.action}.ready { ${r.char} ${r.action}; }`;
   return `${r.char} ${r.action}${r.count > 1 ? `:${r.count}` : ""};`;
 }
