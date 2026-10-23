@@ -39,16 +39,19 @@ const laneId = (cid: string) => `c:${cid}`;
 const stop = (e: PointerEvent | KeyboardEvent) => e.stopPropagation();
 
 /**
- * A block placed first inside another block starts almost at the parent's left edge, so its
- * header would be drawn over the parent's header (or over an if's bottom strip peeking down
- * from the track above). Only in that case, move the header just past what is in the way,
- * and notch that block's background around the obstacle so the obstacle keeps its own
- * block's color underneath. Rows are visited in DOM order, so obstacles are placed first.
+ * Resolves overlaps between block headers and if bottom strips, which only happen when one
+ * block sits at the very edge of another. Priority decides who stays and who moves right:
+ *  1. Headers, in DOM order (parents first). A header that has to move also gets its block's
+ *     background notched around the obstacle, so the obstacle keeps its own color underneath.
+ *  2. Bottom strips, parents first: an else-if header and the parent's strip keep their
+ *     place, and the nested if's strip starts just past them.
  * Positions come from offsetLeft/offsetTop, which ignore the enter animation's scale.
  */
 function layoutHeaders(root: HTMLElement) {
-  const rows = [...root.querySelectorAll<HTMLElement>(".block-head, .branch-peek")];
-  rows.forEach((r) => {
+  const heads = [...root.querySelectorAll<HTMLElement>(".block-head")];
+  // A nested if's strip comes before its parent's in DOM order; reversed, parents go first.
+  const strips = [...root.querySelectorAll<HTMLElement>(".branch-peek")].reverse();
+  [...heads, ...strips].forEach((r) => {
     r.style.paddingLeft = "";
     (r.firstElementChild as HTMLElement | null)?.style.removeProperty("margin-left");
   });
@@ -73,41 +76,36 @@ function layoutHeaders(root: HTMLElement) {
   const hit = (a: Box, b: Box) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
 
   const placed: Box[] = [];
-  for (const row of rows) {
-    const content = row.firstElementChild as HTMLElement | null;
-    if (!content) continue;
+  /** Moves `content` right (via `shift`) until it clears everything placed; returns what it hit. */
+  const place = (content: HTMLElement, shift: (x: number) => void) => {
     let box = boxOf(content);
-    if (row.classList.contains("branch-peek")) {
-      // An if nested at the end of another if ends on the same rail, so both strips would
-      // stack; start the later (outer) strip just past the earlier one.
-      for (let moved = true; moved; ) {
-        moved = false;
-        for (const p of placed) {
-          if (hit(box, p)) {
-            content.style.marginLeft = `${p.right + 4 - posOf(row).x}px`;
-            box = boxOf(content);
-            moved = true;
-          }
-        }
-      }
-      placed.push(box);
-      continue;
-    }
     const obstacles: Box[] = [];
     for (let moved = true; moved; ) {
       moved = false;
       for (const p of placed) {
         if (hit(box, p)) {
-          // The header starts at the row's left padding: move it just past the obstacle.
-          row.style.paddingLeft = `${p.right + 6 - posOf(row).x}px`;
+          shift(p.right);
           box = boxOf(content);
           obstacles.push(p);
           moved = true;
         }
       }
     }
-    if (obstacles.length) notch(row.parentElement as HTMLElement, obstacles);
     placed.push(box);
+    return obstacles;
+  };
+
+  for (const row of heads) {
+    const content = row.firstElementChild as HTMLElement | null;
+    if (!content) continue;
+    // The header starts at the row's left padding: move it just past the obstacle.
+    const obstacles = place(content, (right) => (row.style.paddingLeft = `${right + 6 - posOf(row).x}px`));
+    if (obstacles.length) notch(row.parentElement as HTMLElement, obstacles);
+  }
+  for (const row of strips) {
+    const content = row.firstElementChild as HTMLElement | null;
+    // The strip is its own background, so it simply starts later; nothing to notch.
+    if (content) place(content, (right) => (content.style.marginLeft = `${right + 4 - posOf(row).x}px`));
   }
 
   /** Cuts the obstacles' area out of the top-left corner of the branch's background. */
